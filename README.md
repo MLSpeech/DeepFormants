@@ -1,2 +1,2 @@
-# AccuFormants
+# DeepFormants
 Formant Tracking &amp; Estimation
