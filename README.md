@@ -12,3 +12,7 @@ cd ~/torch; bash install-deps;
 
 ./install.sh
 
+
+Link to Estimation model
+
+https://drive.google.com/open?id=0B4VKt9y2-zriU1dNLVZtQjVKMGM
