@@ -30,12 +30,11 @@ cd ~/torch; bash install-deps;
 
 ./install.sh
 ```
-Download the pre-trained estimation and tracking models from these links:
 
-Link to Estimation model
+Reccomnended use the pre-trained estimation and tracking models.
 
-https://drive.google.com/open?id=0B4VKt9y2-zriU1dNLVZtQjVKMGM
+The Estimation model can be downloaded here and because of size constraints the Tracking model can be abtained by download from ths link
 
-Link to Tracking model
+https://Link/to/Tracking/model
 
 Yossi ?
