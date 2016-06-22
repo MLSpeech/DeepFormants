@@ -18,7 +18,7 @@ Download the code.
 Dependencies:
 Run these lines in a terminal to install everything necessary for feature extraction.
 ```
-sudo apt-get install python-numpy python-scipy python-matplotlib python-nose python-pip
+sudo apt-get install python-numpy python-scipy python-nose python-pip
 
 sudo pip install scikits.talkbox 
 ```
