@@ -3,13 +3,13 @@ Formant Tracking &amp; Estimation
 
 How to use:
 
-For vowel formant estimation call the main script in a terminal with the wav file and the vowel begin and end times
+For vowel formant estimation call the main script in a terminal with the wav file, formant output filename and the vowel begin and end times
 
-```Ex: $ python formants.py mywavfile.wav 2.45 2.78```
+```Ex: $ python formants.py Example.wav examplePredictions --begin 1.2 --end 1.3```
 
-For formant tracking just call the script with the wav file and it will return the formants for the whole file every 10 ms
+For formant tracking just call the script with the wav file and output filename and it will return the formants for the whole wav file every 10 ms
 
-```Ex: $ python formants.py mywavfile.wav```
+```Ex: $ python formants.py Example.wav examplePredictions```
 
 Installation instructions
 
