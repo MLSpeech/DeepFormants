@@ -5,6 +5,8 @@ Formant Tracking &amp; Estimation
 
 Installation instructions
 
+Download the code.
+
 Dependencies:
 Run these lines in a terminal to install everything necessary for feature extraction.
 ```
@@ -20,7 +22,12 @@ cd ~/torch; bash install-deps;
 
 ./install.sh
 ```
+Download the pre-trained estimation and tracking models from these links:
 
 Link to Estimation model
 
 https://drive.google.com/open?id=0B4VKt9y2-zriU1dNLVZtQjVKMGM
+
+Link to Tracking model
+
+Yossi ?
