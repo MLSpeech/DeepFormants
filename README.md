@@ -1,5 +1,18 @@
-# DeepFormants
+DeepFormants
+============
+
+Shua Dissen (shua.dissen@gmail.com)
+Joseph Keshet (joseph.keshet@biu.ac.il)             
+
 Formant Tracking &amp; Estimation
+
+DeepFormants is a software package for formant tracking $and; estimation, using two algorithms based on deep networks. It works as follows:
+* The user provides wav file
+* Optionally the user can provide a start and an end times in seconds 
+* A classifer is 
+
+This is a beta version of Autovot. Any reports of bugs, comments on how to improve the software or documentation, or questions are greatly appreciated, and should be sent to the authors at the addresses given above.
+
 
 How to use:
 
