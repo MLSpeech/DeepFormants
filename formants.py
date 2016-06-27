@@ -23,7 +23,7 @@ def main(wav_filename, preds_filename, begin, end):
     tmp_features_filename = tempfile._get_default_tempdir() + "/" + next(tempfile._get_candidate_names()) + ".txt"
     print tmp_features_filename
 
-    if args.begin > 0.0 or args.end > 0.0:
+    if begin > 0.0 or end > 0.0:
         features.create_features(wav_filename, tmp_features_filename, begin, end)
         easy_call("th load_estimation_model.lua " + tmp_features_filename + ' ' + preds_filename)
     else:
