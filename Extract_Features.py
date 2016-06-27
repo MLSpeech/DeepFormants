@@ -1,4 +1,5 @@
 __author__ = 'shua'
+
 import argparse
 import numpy as np
 import wave
@@ -12,8 +13,10 @@ from copy import deepcopy
 from scipy.fftpack import fft, ifft
 from scikits.talkbox.linpred import lpc
 import shutil
+
 epsilon = 0.0000000001
 prefac = .97
+
 
 def build_data(wav,begin=None,end=None):
     wav_in_file = wave.Wave_read(wav)
@@ -28,6 +31,7 @@ def build_data(wav,begin=None,end=None):
     for i in range(0, l-100, 160):
         X.append(data[i:i + 480])
     return X
+
 
 def periodogram(x, nfft=None, fs=1):
     """Compute the periodogram of the given signal, with the given fft size.
@@ -89,6 +93,7 @@ def periodogram(x, nfft=None, fs=1):
     fgrid = np.linspace(0, fs * 0.5, pn)
     return pxx[:pn] / (n * fs), fgrid
 
+
 def arspec(x, order, nfft=None, fs=1):
     """Compute the spectral density using an AR model.
 
@@ -140,6 +145,7 @@ def arspec(x, order, nfft=None, fs=1):
     fx = np.linspace(0, fs * 0.5, pxx.size)
     return pxx, fx
 
+
 def taper(n, p=0.1):
     """Return a split cosine bell taper (or window)
 
@@ -165,6 +171,7 @@ def taper(n, p=0.1):
 
     return w
 
+
 def atal(x, order, num_coefs):
     x = np.atleast_1d(x)
     n = x.size
@@ -184,9 +191,11 @@ def atal(x, order, num_coefs):
             c[m] += (float(k)/float(m)-1)*a[k]*c[m-k]
     return c
 
+
 def preemp(input, p):
     """Pre-emphasis filter."""
     return lfilter([1., -p], 1, input)
+
 
 def arspecs(input_wav,order,Atal=False):
     epsilon = 0.0000000001
@@ -206,6 +215,7 @@ def arspecs(input_wav,order,Atal=False):
         # Use the DCT to 'compress' the coefficients (spectrum -> cepstrum domain)
         ar = dct(mspec1, type=2, norm='ortho', axis=-1)
         return ar[:30]
+
 
 def specPS(input_wav,pitch):
         N = len(input_wav)
@@ -233,41 +243,37 @@ def specPS(input_wav,pitch):
         # Use the DCT to 'compress' the coefficients (spectrum -> cepstrum domain)
         ceps = dct(mspec, type=2, norm='ortho', axis=-1)
         return ceps[:50]
-def build_single_feature_row(data,Atal):
-	lpcs = [8,9,10,11,12,13,14,15,16,17]
-        arr = []
-	periodo = specPS(data,50)
-	arr.extend(periodo)
-	for j in lpcs:
-	    if Atal:
-		ars = arspecs(data, j, Atal=True)
-	    else:
-	       ars = arspecs(data, j)
-	    arr.extend(ars)
-	for i in range(len(arr)):
-		if np.isnan(np.float(arr[i])):
-			arr[i] = 0.0
-	return arr
 
-def Create_features(input_wav,feature_file_name, begin=None,end=None,Atal=False):
-    X = build_data(input_wav,begin,end)
-    full_path = os.path.realpath(__file__)
-    output_directory = os.path.dirname(full_path)+'/Features/'
-    if Atal:
-        feature_file = output_directory+"ATAL_features_"+feature_file_name+'.txt'
-    else:
-        feature_file = output_directory+"features_"+feature_file_name+'.txt'
+
+def build_single_feature_row(data, Atal):
+    lpcs = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+    arr = []
+    periodo = specPS(data, 50)
+    arr.extend(periodo)
+    for j in lpcs:
+        if Atal:
+            ars = arspecs(data, j, Atal=True)
+        else:
+            ars = arspecs(data, j)
+        arr.extend(ars)
+    for i in range(len(arr)):
+        if np.isnan(np.float(arr[i])):
+            arr[i] = 0.0
+    return arr
+
+
+def create_features(input_wav_filename, feature_filename, begin=None, end=None, Atal=False):
+    X = build_data(input_wav_filename, begin, end)
     if begin is not None and end is not None:
-	arr = [input_wav.replace('.wav','')]
-	arr.extend(build_single_feature_row(X,Atal))
-	np.savetxt(feature_file,np.asarray([arr]),delimiter=",",fmt="%s")
-	return arr
+        arr = [input_wav_filename]
+        arr.extend(build_single_feature_row(X, Atal))
+        np.savetxt(feature_filename, np.asarray([arr]), delimiter=",", fmt="%s")
+        return arr
     arcep_mat = []
     for i in range(len(X)):
-	arr = [input_wav.replace('.wav','_PART_')+str(i)]
-	arr.extend(build_single_feature_row(X[i], Atal))
-	arcep_mat.append(arr)
-    np.savetxt(feature_file,np.asarray(arcep_mat),delimiter=",",fmt="%s")
+        arr = [input_wav_filename + str(i)]
+        arr.extend(build_single_feature_row(X[i], Atal))
+        arcep_mat.append(arr)
+    np.savetxt(feature_filename, np.asarray(arcep_mat), delimiter=",", fmt="%s")
     return arcep_mat
-
 

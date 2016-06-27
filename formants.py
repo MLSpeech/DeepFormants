@@ -1,14 +1,13 @@
+
 import Extract_Features as features
 from subprocess import call
-import os
 import sys
-import shlex
 import argparse
+import tempfile
 
 
-def easy_call(command, debug_mode=False):
+def easy_call(command, debug_mode=True):
     try:
-        #command = "time " + command
         if debug_mode:
             print >>sys.stderr, command
         call(command, shell=True)
@@ -28,20 +27,14 @@ if __name__ == "__main__":
     parser.add_argument('--begin', help="beginning time in the WAV file", default=0.0, type=float)
     parser.add_argument('--end', help="end time in the WAV file", default=-1.0, type=float)
     args = parser.parse_args()
-    full_path = os.path.realpath(__file__)
-    if not os.path.exists(os.path.dirname(full_path)+'/Features/'):
-        os.makedirs(os.path.dirname(full_path)+'/Features/')
-    if not os.path.exists(os.path.dirname(full_path)+'/Predictions/'):
-        os.makedirs(os.path.dirname(full_path)+'/Predictions/')
+
+    tmp_features_filename = tempfile._get_default_tempdir() + "/" + next(tempfile._get_candidate_names()) + ".txt"
+    print tmp_features_filename
 
     if args.begin > 0.0 or args.end > 0.0:
-    	Data = features.Create_features(args.wav_file, args.formants_file, args.begin, args.end)
-    	ff = str(os.path.dirname(os.path.realpath(__file__))+'/Features/features_' + args.formants_file+'.txt')
-	pf = str(os.path.dirname(os.path.realpath(__file__))+'/Predictions/' +args.formants_file+'.csv')
-	easy_call("th load_estimation_model.lua " + ff + ' ' + pf)
+        features.create_features(args.wav_file, tmp_features_filename, args.begin, args.end)
+        easy_call("th load_estimation_model.lua " + tmp_features_filename + ' ' + args.formants_file)
     else:
-    	Data = features.Create_features(args.wav_file, args.formants_file)
-    	ff = str(os.path.dirname(os.path.realpath(__file__))+'/Features/features_' + args.formants_file+'.txt')
-	pf = str(os.path.dirname(os.path.realpath(__file__))+'/Predictions/' +args.formants_file+'.csv')
-	easy_call("th load_tracking_model.lua " + ff + ' ' + pf)
+        features.create_features(args.wav_file, tmp_features_filename)
+        easy_call("th load_tracking_model.lua " + tmp_features_filename + ' ' + args.formants_file)
 
