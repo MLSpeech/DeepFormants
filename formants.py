@@ -19,6 +19,18 @@ def easy_call(command, debug_mode=True):
         exit(-1)
 
 
+def main(wav_filename, preds_filename, begin, end):
+    tmp_features_filename = tempfile._get_default_tempdir() + "/" + next(tempfile._get_candidate_names()) + ".txt"
+    print tmp_features_filename
+
+    if args.begin > 0.0 or args.end > 0.0:
+        features.create_features(wav_filename, tmp_features_filename, begin, end)
+        easy_call("th load_estimation_model.lua " + tmp_features_filename + ' ' + preds_filename)
+    else:
+        features.create_features(wav_filename, tmp_features_filename)
+        easy_call("th load_tracking_model.lua " + tmp_features_filename + ' ' + preds_filename)
+
+
 if __name__ == "__main__":
     # parse arguments
     parser = argparse.ArgumentParser(description='Extract features for formants estimation.')
@@ -28,13 +40,5 @@ if __name__ == "__main__":
     parser.add_argument('--end', help="end time in the WAV file", default=-1.0, type=float)
     args = parser.parse_args()
 
-    tmp_features_filename = tempfile._get_default_tempdir() + "/" + next(tempfile._get_candidate_names()) + ".txt"
-    print tmp_features_filename
-
-    if args.begin > 0.0 or args.end > 0.0:
-        features.create_features(args.wav_file, tmp_features_filename, args.begin, args.end)
-        easy_call("th load_estimation_model.lua " + tmp_features_filename + ' ' + args.formants_file)
-    else:
-        features.create_features(args.wav_file, tmp_features_filename)
-        easy_call("th load_tracking_model.lua " + tmp_features_filename + ' ' + args.formants_file)
+    main(args.wav_file, args.formants_file, args.begin, args.end)
 
