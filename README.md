@@ -4,8 +4,6 @@ DeepFormants
 Shua Dissen (shua.dissen@gmail.com)
 Joseph Keshet (joseph.keshet@biu.ac.il)             
 
-Formant Tracking and Estimation
-
 DeepFormants is a software package for formant tracking and estimation, using two algorithms based on deep networks. It works as follows:
 * The user provides a wav file with an initial stop consonant. 
 * Optionally, the user can designate a window for estimation by providing a start and end time (specified in seconds).
@@ -19,11 +17,11 @@ How to use:
 
 For vowel formant estimation, call the main script in a terminal with the following inputs: wav file, formant output filename, and the vowel begin and end times:
 
-```Ex: $ python formants.py Example.wav examplePredictions --begin 1.2 --end 1.3```
+```Ex: $ python formants.py Example.wav ExamplePredictions.csv --begin 1.2 --end 1.3```
 
 For formant tracking, just call the script with the wav file and output filename:
 
-```Ex: $ python formants.py Example.wav examplePredictions```
+```Ex: $ python formants.py Example.wav ExamplePredictions.csv```
 
 Installation instructions
 
