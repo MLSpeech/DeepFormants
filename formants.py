@@ -1,5 +1,5 @@
 
-import Extract_Features as features
+import extract_features as features
 from subprocess import call
 import sys
 import argparse
