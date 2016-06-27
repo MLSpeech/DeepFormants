@@ -35,9 +35,8 @@ recommended use the pre-trained estimation and tracking models.
 
 The Estimation model can be downloaded here and because of size constraints the Tracking model can be abtained by download from this link
 
-https://Link/to/Tracking/model
+http://u.cs.biu.ac.il/~jkeshet/deep_formants/Tracking_model.dat
 
-Yossi ?
 
 TODO
 
