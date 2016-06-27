@@ -2,7 +2,6 @@ DeepFormants
 ============
 
 Shua Dissen (shua.dissen@gmail.com)
-
 Joseph Keshet (joseph.keshet@biu.ac.il)             
 
 DeepFormants is a software package for formant tracking and estimation, using two algorithms based on deep networks. It works as follows:
