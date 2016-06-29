@@ -9,8 +9,8 @@ DeepFormants is a software package for formant tracking and estimation, using tw
 * The user provides a wav file with an initial stop consonant. 
 * Optionally, the user can designate a window for estimation by providing a start and end time (specified in seconds).
 * A classifer is used to estimate the formants in the file, with two modes:
-* Estimation: If a time window is specified, a single estimate is made for F1-F3 within that window. 
-* Tracking: If no time window is given, the model will track F1-F3 and give a measurement at every 10 milliseconds across the length of the file.
+* Estimation: If a time window is specified, a single estimate is made for F1-F4 within that window. 
+* Tracking: If no time window is given, the model will track F1-F4 and give a measurement at every 10 milliseconds across the length of the file.
 
 This is a beta version of DeepFormants. Any reports of bugs, comments on how to improve the software or documentation, or questions are greatly appreciated, and should be sent to the authors at the addresses given above.
 
