@@ -277,3 +277,19 @@ def create_features(input_wav_filename, feature_filename, begin=None, end=None, 
     np.savetxt(feature_filename, np.asarray(arcep_mat), delimiter=",", fmt="%s")
     return arcep_mat
 
+
+if __name__ == "__main__":
+    # parse arguments
+    parser = argparse.ArgumentParser(description='Extract features for formants estimation.')
+    parser.add_argument('wav_file', default='', help="WAV audio filename (single vowel or an whole utternace)")
+    parser.add_argument('feature_file', default='', help="output feature text file")
+    parser.add_argument('--begin', help="beginning time in the WAV file", default=0.0, type=float)
+    parser.add_argument('--end', help="end time in the WAV file", default=-1.0, type=float)
+    args = parser.parse_args()
+
+    if args.begin > 0.0 or args.end > 0.0:
+        create_features(args.wav_file, args.feature_file, args.begin, args.end)
+    else:
+        create_features(args.wav_file, args.feature_file)
+
+
