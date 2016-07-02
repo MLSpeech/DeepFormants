@@ -54,9 +54,8 @@ def csv_append_row(tmp_preds, preds_filename, with_headers=True):
             f.write(line)
 
 
-
-def generate_tmp_filename():
-    return tempfile._get_default_tempdir() + "/" + next(tempfile._get_candidate_names()) + ".txt"
+def generate_tmp_filename(extension):
+    return tempfile._get_default_tempdir() + "/" + next(tempfile._get_candidate_names()) + "." + extension
 
 
 def logging_defaults(logging_level="INFO"):
