@@ -51,14 +51,14 @@ python formants.py data/Example.wav data/ExamplePredictions.csv --begin 1.2 --en
 or the vowel begin and end times can be taken from a TextGrid file (here the name of the TextGrid is Example.TextGrid and the vowel is taken from a tier called "VOWEL"):
 
 ```
-python formants.py data/Example.wav data/examplePredictions --textgrid_filename data/Example.TextGrid \
+python formants.py data/Example.wav data/examplePredictions.csv --textgrid_filename data/Example.TextGrid \
           --textgrid_tier VOWEL
 ```
 
 For formant tracking, just call the script with the wav file and output filename:
 
 ```
-python formants.py data/Example.wav data/ExamplePredictions
+python formants.py data/Example.wav data/ExamplePredictions.csv
 ```
 
 
