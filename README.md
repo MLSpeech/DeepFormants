@@ -38,17 +38,21 @@ cd ~/torch; bash install-deps;
 ```
 
 The Estimation model can be downloaded here and because of size constraints the Tracking model can be abtained by download from this link
-[tracking_model.mat] (http://u.cs.biu.ac.il/~jkeshet/deep_formants/tracking_model.dat)
+[tracking_model.mat] (https://drive.google.com/open?id=0Bxkc5_D0JjpiZWx4eTU1d0hsVXc)
 
 ## How to use:
 
 For vowel formant estimation, call the main script in a terminal with the following inputs: wav file, formant output filename, and the vowel begin and end times:
 
-```Ex: $ python formants.py Example.wav examplePredictions --begin 1.2 --end 1.3```
+```Ex: $ python formants.py data/Example.wav data/ExamplePredictions.csv --begin 1.2 --end 1.3```
+
+or the vowel begin and end times can be taken from a TextGrid file (here the name of the TextGrid is Example.TextGrid and the vowel is taken from a tier called "VOWEL"):
+
+```Ex: $ python formants.py data/Example.wav data/examplePredictions --textgrid_filename data/Example.TextGrid --textgrid_tier VOWEL```
 
 For formant tracking, just call the script with the wav file and output filename:
 
-```Ex: $ python formants.py Example.wav examplePredictions```
+```Ex: $ python formants.py data/Example.wav data/ExamplePredictions```
 
 
 ## TODO
