@@ -62,6 +62,7 @@ def logging_defaults(logging_level="INFO"):
     logging.basicConfig(level=logging_level, format='%(asctime)s.%(msecs)d [%(filename)s] %(levelname)s: %(message)s',
                         datefmt='%H:%M:%S')
 
+
 def num_lines(filename):
     lines = 0
     for _ in open(filename, 'rU'):
