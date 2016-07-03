@@ -35,7 +35,7 @@ for line in f_file:lines('*l') do
 	end
 end
 local X = data[{{},{2,-1}}]
-model = torch.load('Tracking_model.dat')
+model = torch.load('tracking_model.dat')
 local myPrediction = model:forward(X)
 p_file:write('NAME,F1,F2,F3,F4\n')
 for p=1, (#myPrediction)[1] do
