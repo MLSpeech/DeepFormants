@@ -48,7 +48,9 @@ For vowel formant estimation, call the main script in a terminal with the follow
 
 or the vowel begin and end times can be taken from a TextGrid file (here the name of the TextGrid is Example.TextGrid and the vowel is taken from a tier called "VOWEL"):
 
-```Ex: $ python formants.py data/Example.wav data/examplePredictions --textgrid_filename data/Example.TextGrid --textgrid_tier VOWEL```
+```
+Ex: $ python formants.py data/Example.wav data/examplePredictions --textgrid_filename data/Example.TextGrid --textgrid_tier VOWEL
+```
 
 For formant tracking, just call the script with the wav file and output filename:
 
