@@ -46,6 +46,7 @@ The Estimation model can be downloaded here and because of size constraints the 
 
 For vowel formant estimation, call the main script in a terminal with the following inputs: wav file, formant output filename, and the vowel begin and end times:
 
+Wav files must have a sample rate of 16k for correct predictions!
 ```
 python formants.py data/Example.wav data/ExamplePredictions.csv --begin 1.2 --end 1.3
 ```
