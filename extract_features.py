@@ -13,6 +13,7 @@ from copy import deepcopy
 from scipy.fftpack import fft, ifft
 from scikits.talkbox.linpred import lpc
 import shutil
+from helpers.utilities import *
 
 epsilon = 0.0000000001
 prefac = .97
@@ -263,7 +264,9 @@ def build_single_feature_row(data, Atal):
 
 
 def create_features(input_wav_filename, feature_filename, begin=None, end=None, Atal=False):
-    X = build_data(input_wav_filename, begin, end)
+    tmp_wav16_filename = generate_tmp_filename("wav")
+    easy_call("sox " + input_wav_filename + " -c 1 -r 16000 " + tmp_wav16_filename)
+    X = build_data(tmp_wav16_filename, begin, end)
     if begin is not None and end is not None:
         arr = [input_wav_filename]
         arr.extend(build_single_feature_row(X, Atal))
