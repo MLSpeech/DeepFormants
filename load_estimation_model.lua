@@ -30,5 +30,5 @@ local X = data[{{},{2,-1}}]
 model = torch.load('estimation_model.dat')
 local myPrediction = model:forward(X)
 p_file:write('NAME,F1,F2,F3,F4\n')
-p_file:write(name..','..tostring(myPrediction[1][1])..','..tostring(myPrediction[1][2])..','..tostring(myPrediction[1][3])..','..tostring(myPrediction[1][4])..'\n')
+p_file:write(name..','..tostring(1000*myPrediction[1][1])..','..tostring(1000*myPrediction[1][2])..','..tostring(1000*myPrediction[1][3])..','..tostring(1000*myPrediction[1][4])..'\n')
 

@@ -39,6 +39,6 @@ model = torch.load('tracking_model.dat')
 local myPrediction = model:forward(X)
 p_file:write('NAME,F1,F2,F3,F4\n')
 for p=1, (#myPrediction)[1] do
-	p_file:write(names[p]..','..tostring(myPrediction[p][1])..','..tostring(myPrediction[p][2])..','..tostring(myPrediction[p][3])..','..tostring(myPrediction[p][4])..'\n')
+	p_file:write(names[p]..','..tostring(1000*myPrediction[p][1])..','..tostring(10008myPrediction[p][2])..','..tostring(1000*myPrediction[p][3])..','..tostring(1000*myPrediction[p][4])..'\n')
 
 end
