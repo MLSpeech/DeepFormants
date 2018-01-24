@@ -26,7 +26,8 @@ def build_data(wav,begin=None,end=None):
     dstr = wav_in_file.readframes(N)
     data = np.fromstring(dstr, np.int16)
     if begin is not None and end is not None:
-        return data[begin*16000:end*16000]
+        #return data[begin*16000:end*16000] #numpy 1.11.0
+        return data[np.int(begin*16000):np.int(end*16000)] #numpy 1.14.0
     X = []
     l = len(data)
     for i in range(0, l-100, 160):
