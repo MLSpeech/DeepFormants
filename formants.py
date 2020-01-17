@@ -9,19 +9,19 @@ import shutil
 
 def predict_from_times(wav_filename, preds_filename, begin, end):
     tmp_features_filename = tempfile._get_default_tempdir() + "/" + next(tempfile._get_candidate_names()) + ".txt"
-    print tmp_features_filename
+    print(tmp_features_filename)
 
     if begin > 0.0 or end > 0.0:
         features.create_features(wav_filename, tmp_features_filename, begin, end)
-        easy_call("th load_estimation_model.lua " + tmp_features_filename + ' ' + preds_filename)
+        easy_call("luajit load_estimation_model.lua " + tmp_features_filename + ' ' + preds_filename)
     else:
         features.create_features(wav_filename, tmp_features_filename)
-        easy_call("th load_tracking_model.lua " + tmp_features_filename + ' ' + preds_filename)
+        easy_call("luajit load_tracking_model.lua " + tmp_features_filename + ' ' + preds_filename)
 
 
 def predict_from_textgrid(wav_filename, preds_filename, textgrid_filename, textgrid_tier):
 
-    print wav_filename
+    print(wav_filename)
 
     if os.path.exists(preds_filename):
         os.remove(preds_filename)

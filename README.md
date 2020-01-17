@@ -24,9 +24,7 @@ Download the code. The code is based on signal processing package in Python call
 Dependencies:
 Run these lines in a terminal to install everything necessary for feature extraction.
 ```
-sudo apt-get install python-numpy python-scipy python-nose python-pip
-
-sudo pip install scikits.talkbox 
+sudo apt-get install python3-numpy python3-scipy python3-nose
 ```
 Next for the installation of Torch for loading the models run this.
 ```
@@ -37,30 +35,31 @@ cd ~/torch; bash install-deps;
 ./install.sh
 ```
 ```
-luarocks install rnn
+git clone https://github.com/Element-Research/rnn.git old-rnn
+cd old-rnn; luarocks make rocks/rnn-scm-1.rockspec
 ```
-The Estimation model can be downloaded here and because of size constraints the Tracking model can be abtained by download from this link
-[tracking_model.mat] (https://drive.google.com/open?id=0Bxkc5_D0JjpiZWx4eTU1d0hsVXc)
+The Estimation model can be downloaded here and because of size constraints the Tracking model can be obtained by download from this link:
+[tracking_model.mat](https://drive.google.com/open?id=0Bxkc5_D0JjpiZWx4eTU1d0hsVXc)
 
 ## How to use:
 
 For vowel formant estimation, call the main script in a terminal with the following inputs: wav file, formant output filename, and the vowel begin and end times:
 
 ```
-python formants.py data/Example.wav data/ExamplePredictions.csv --begin 1.2 --end 1.3
+python3 formants.py data/Example.wav data/ExamplePredictions.csv --begin 1.2 --end 1.3
 ```
 
 or the vowel begin and end times can be taken from a TextGrid file (here the name of the TextGrid is Example.TextGrid and the vowel is taken from a tier called "VOWEL"):
 
 ```
-python formants.py data/Example.wav data/examplePredictions.csv --textgrid_filename data/Example.TextGrid \
+python3 formants.py data/Example.wav data/examplePredictions.csv --textgrid_filename data/Example.TextGrid \
           --textgrid_tier VOWEL
 ```
 
 For formant tracking, just call the script with the wav file and output filename:
 
 ```
-python formants.py data/Example.wav data/ExamplePredictions.csv
+python3 formants.py data/Example.wav data/ExamplePredictions.csv
 ```
 
 
