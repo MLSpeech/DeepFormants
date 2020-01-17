@@ -9,9 +9,9 @@ from os.path import isfile, join
 import math
 from scipy.fftpack.realtransforms import dct
 from scipy.signal import lfilter, hamming
-from copy import deepcopy
 from scipy.fftpack import fft, ifft
-from scikits.talkbox.linpred import lpc
+#from scikits.talkbox.linpred import lpc  # obsolete
+from helpers.conch_lpc import lpc
 import shutil
 from helpers.utilities import *
 
@@ -88,9 +88,9 @@ def periodogram(x, nfft=None, fs=1):
 
     pxx = np.abs(fft(x, nfft)) ** 2
     if nfft % 2 == 0:
-        pn = nfft / 2 + 1
+        pn = nfft // 2 + 1
     else:
-        pn = (nfft + 1 )/ 2
+        pn = (nfft + 1) // 2
 
     fgrid = np.linspace(0, fs * 0.5, pn)
     return pxx[:pn] / (n * fs), fgrid
@@ -137,9 +137,9 @@ def arspec(x, order, nfft=None, fs=1):
 
     # This is not enough to deal correctly with even/odd size
     if nfft % 2 == 0:
-        pn = nfft / 2 + 1
+        pn = nfft // 2 + 1
     else:
-        pn = (nfft + 1 )/ 2
+        pn = (nfft + 1) // 2
 
     px = 1 / np.fft.fft(a, nfft)[:pn]
     pxx = np.real(np.conj(px) * px)
@@ -200,7 +200,6 @@ def preemp(input, p):
 
 
 def arspecs(input_wav,order,Atal=False):
-    epsilon = 0.0000000001
     data = input_wav
     if Atal:
         ar = atal(data, order, 30)
@@ -211,8 +210,10 @@ def arspecs(input_wav,order,Atal=False):
         for k, l in zip(ars[0], ars[1]):
             ar.append(math.log(math.sqrt((k**2)+(l**2))))
         for val in range(0,len(ar)):
-            if ar[val] == 0.0:
-                ar[val] = deepcopy(epsilon)
+            if ar[val] < 0.0:
+                ar[val] = np.nan
+            elif ar[val] == 0.0:
+                ar[val] = epsilon
         mspec1 = np.log10(ar)
         # Use the DCT to 'compress' the coefficients (spectrum -> cepstrum domain)
         ar = dct(mspec1, type=2, norm='ortho', axis=-1)
@@ -221,10 +222,10 @@ def arspecs(input_wav,order,Atal=False):
 
 def specPS(input_wav,pitch):
         N = len(input_wav)
-        samps = N/pitch
+        samps = N // pitch
         if samps == 0:
             samps = 1
-        frames = N/samps
+        frames = N // samps
         data = input_wav[0:frames]
         specs = periodogram(data,nfft=4096)
         for i in range(1,int(samps)):
@@ -236,10 +237,11 @@ def specPS(input_wav,pitch):
             specs[0][s] /= float(samps)
         peri = []
         for k, l in zip(specs[0], specs[1]):
-            if k == 0 and l == 0:
-                peri.append(epsilon)
-            else:
-                peri.append(math.log(math.sqrt((k ** 2) + (l ** 2))))
+            m = math.sqrt((k ** 2) + (l ** 2))
+            if m > 0: m = math.log(m)
+            if m == 0: m = epsilon
+            elif m < 0: m = np.nan
+            peri.append(m)
         # Filter the spectrum through the triangle filterbank
         mspec = np.log10(peri)
         # Use the DCT to 'compress' the coefficients (spectrum -> cepstrum domain)
