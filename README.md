@@ -40,7 +40,7 @@ cd ~/torch; bash install-deps;
 luarocks install rnn
 ```
 The Estimation model can be downloaded here and because of size constraints the Tracking model can be abtained by download from this link
-[tracking_model.mat] (https://drive.google.com/open?id=0Bxkc5_D0JjpiZWx4eTU1d0hsVXc)
+[tracking_model.mat] (https://drive.google.com/open?id=1-BwlbbHykIV52c-SL1ofcppxZ5pTTXai)
 
 ## How to use:
 
