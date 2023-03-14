@@ -11,7 +11,8 @@ from scipy.fftpack.realtransforms import dct
 from scipy.signal import lfilter, hamming
 from copy import deepcopy
 from scipy.fftpack import fft, ifft
-from scikits.talkbox.linpred import lpc
+# from scikits.talkbox.linpred import lpc
+from levinson_lpc import lpc
 import shutil
 from helpers.utilities import *
 
