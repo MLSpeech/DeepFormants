@@ -1,17 +1,26 @@
 from __future__ import print_function, division
 import torch
+import torchvision
+import torchvision.transforms as transforms
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 from torch import optim
 import numpy as np
 
-train_data = np.load("timitTrain.npy")
-test_data = np.load("timitTest.npy")
-Xtrain = train_data[:,5:].astype(np.float32)
-Ytrain = train_data[:,1:5].astype(np.float32)
-Xtest = test_data[:,5:].astype(np.float32)
-Ytest = test_data[:,1:5].astype(np.float32)
+from torch.utils.data import DataLoader
+from datasets import Dataset
+output_dir = "/Users/olgaseleznova/Work/Speech_recognition/DeepFormants/data/Outputs/Estimator/"
+train_data = np.load(output_dir+"Train__output.npy")
+test_data = np.load(output_dir+"Test__output.npy")
+print(train_data)
+print(test_data)
+
+Xtrain = train_data[:, 5:].astype(np.float32)
+Ytrain = train_data[:, 1:5].astype(np.float32)
+Xtest = test_data[:, 5:].astype(np.float32)
+Ytest = test_data[:, 1:5].astype(np.float32)
+
 
 use_cuda = torch.cuda.is_available()
 device = torch.device("cuda" if use_cuda else "cpu")
@@ -71,10 +80,10 @@ model = Net().to(device)
 
 optimizer = optim.Adagrad(model.parameters(), lr=0.01)
 
-epochs = 80
+best_loss = 1000.0
+epochs = 200
 batchSize = 20
-n_batches = Xtrain.size()[0]
-
+n_batches = int(Xtrain.size()[0]/batchSize)
 costs = []
 test_accuracies = []
 print("Starting training ")
@@ -126,10 +135,13 @@ for i in range(epochs):
     print('median: %.3f %.3f %.3f %.3f' % (np.median(list_1), np.median(list_2), np.median(list_3), np.median(list_4)))
     print('max loss: %.3f %.3f %.3f %.3f' % (max_1, max_2, max_3, max_4))
     print('Real test score: %.3f %.3f %.3f %.3f' % (loss1, loss2, loss3, loss4))
-    print("Epoch: %d, acc: %.3f" % (i, total_loss))
+    print("Epoch: %d, loss: %.3f" % (i, total_loss))
 
-    costs.append(cost/n_batches)
+    costs.append(cost / n_batches)
     test_accuracies.append(round(total_loss, 3))
-    torch.save(model.state_dict(), "LPC_NN.pt")
+    if total_loss < best_loss:
+        print("SAVING MODEL", total_loss, best_loss)
+    best_loss = total_loss
+    torch.save(model.state_dict(), "LPC_NN_scaledLoss.pt")
 
 print(test_accuracies)

@@ -5,25 +5,29 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 from torch import optim
 import numpy as np
+import os
+import wandb
 
+run = wandb.init(project="asr-formants")
+config = run.config
 
 use_cuda = torch.cuda.is_available()
 device = torch.device("cuda" if use_cuda else "cpu")
+dir = "/Users/olgaseleznova/Work/Speech_recognition/DeepFormants/data/Outputs/Tracker-0507"
 
+Xtrain_raw = np.load(os.path.join(dir, "LPC_RNN_X_train.npy"))[:, 1:].astype(np.float32).reshape(-1, 350)
+Xtest_raw = np.load(os.path.join(dir, "LPC_RNN_X_test.npy"))[:, 1:].astype(np.float32).reshape(-1, 350)
 
-dir = "pytorchFormants/Tracker/"
+Ytrain_raw = np.load(os.path.join(dir, "LPC_RNN_Y_train.npy"))[:, 1:].astype(np.float32).reshape(-1, 4)
+Ytest_raw = np.load(os.path.join(dir, "LPC_RNN_Y_test.npy"))[:, 1:].astype(np.float32).reshape(-1, 4)
 
-Xtrain_raw = np.load(dir + "LPC_RNN_X_train.npy").astype(np.float32).reshape(-1, 350)
-Xtest_raw = np.load(dir + "LPC_RNN_X_test.npy").astype(np.float32).reshape(-1, 350)
-
-Ytrain_raw = np.load(dir + "LPC_RNN_Y_train.npy").astype(np.float32).reshape(-1, 4)
-Ytest_raw = np.load(dir + "LPC_RNN_Y_test.npy").astype(np.float32).reshape(-1, 4)
 seq = 20
 Xtrain = Xtrain_raw[:int(Xtrain_raw.shape[0]/seq)*seq, ].reshape(-1, seq, 350)
 Ytrain = Ytrain_raw[:int(Ytrain_raw.shape[0]/seq)*seq, ].reshape(-1, seq, 4)
 
 Xtest = Xtest_raw[:int(Xtest_raw.shape[0]/seq)*seq, ].reshape(-1, seq, 350)
 Ytest = Ytest_raw[:int(Ytest_raw.shape[0]/seq)*seq, ].reshape(-1, seq, 4)
+
 
 class LSTM(nn.Module):
 
@@ -42,23 +46,12 @@ class LSTM(nn.Module):
         self.fc = nn.Linear(256, 4)
         self.to(device)
 
-    # def forward(self, x, lengths, h1, h2):
-    #     packed_x, sorted_idx = sort_and_pack(x, lengths)
-    #     out, _ = self.lstm1(packed_x, h1)
-    #     out = unpack_and_unsort(out, sorted_idx)
-    #     out = F.sigmoid(out)
-    #     out, sorted_idx = sort_and_pack(out, lengths)
-    #     out, _ = self.lstm2(out, h2)
-    #     out = unpack_and_unsort(out, sorted_idx)
-    #     out = self.fc(out)
-    #     out = out.view(self.batch_size, -1, 4)
-    #     return out
-
     def forward(self, x):
         x, _ = self.lstm1(x)
         x, _ = self.lstm2(x)
-        x  = self.fc(x)
+        x = self.fc(x)
         return x
+
 
 def train(model, loss, optimizer, inputs, labels):
     inputs = Variable(inputs.to(device))
@@ -82,10 +75,18 @@ def predict(model, inputs):
 loss = nn.L1Loss()
 epochs = 100
 batchSize = 10
+best_loss = 1000.0
+
+#save model inputs and hyperparameters
+config.lr = 0.01
+config.batch_size = batchSize
+config.epoch = epochs
+config.best_loss = best_loss
 
 n_batches = int(Xtrain.shape[0]/batchSize)
 
 model = LSTM().to(device)
+run.watch(model)
 optimizer = optim.Adagrad(model.parameters(), lr=0.01)
 
 
@@ -98,7 +99,6 @@ for i in range(epochs):
         Xbatch = torch.from_numpy(Xtrain[j*batchSize:(j+1)*batchSize])
         Ybatch = torch.from_numpy(Ytrain[j*batchSize:(j+1)*batchSize])
         cost += train(model, loss, optimizer, Xbatch, Ybatch)
-
     loss1 = 0.0
     loss2 = 0.0
     loss3 = 0.0
@@ -138,12 +138,31 @@ for i in range(epochs):
     loss4 /= len(Ytest)*seq
     total_loss = loss1 + loss2 + loss3 + loss4
     total_loss /= 4.0
+
+    # MODEL LOGS
+    run.log({"loss1": loss1})
+    run.log({"loss2": loss2})
+    run.log({"loss3": loss3})
+    run.log({"loss4": loss4})
+    run.log({"total_loss": total_loss})
+    run.log({"median1": np.median(list_1)})
+    run.log({"median2": np.median(list_2)})
+    run.log({"median3": np.median(list_3)})
+    run.log({"median4": np.median(list_4)})
     print('median: %.3f %.3f %.3f %.3f' % (np.median(list_1), np.median(list_2), np.median(list_3), np.median(list_4)))
     print('max loss: %.3f %.3f %.3f %.3f' % (max_1, max_2, max_3, max_4))
     print('Real test score: %.3f %.3f %.3f %.3f' % (loss1, loss2, loss3, loss4))
-    print("Epoch: %d, acc: %.3f" % (i, total_loss))
+    print("Epoch: %d, loss: %.3f" % (i, total_loss))
 
     costs.append(cost/n_batches)
     test_accuracies.append(round(total_loss, 3))
+    if total_loss < best_loss:
+        print("SAVING MODEL", total_loss, best_loss)
+        best_loss = total_loss
+        run.log({"best_loss": best_loss})
+        torch.save(model.state_dict(), "LPC_RNN.pt")
 
-    torch.save(model.state_dict(), "LPC_RNN.pt")
+# load model
+# predict the test set
+# calculate average error per phoneme class
+# should match appr. table 6.
