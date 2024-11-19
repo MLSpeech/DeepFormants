@@ -7,26 +7,37 @@ from torch import optim
 import numpy as np
 import os
 import wandb
+import pandas as pd
 
 run = wandb.init(project="asr-formants")
 config = run.config
 
 use_cuda = torch.cuda.is_available()
 device = torch.device("cuda" if use_cuda else "cpu")
-dir = "/Users/olgaseleznova/Work/Speech_recognition/DeepFormants/data/Outputs/Tracker-0507"
 
-Xtrain_raw = np.load(os.path.join(dir, "LPC_RNN_X_train.npy"))[:, 1:].astype(np.float32).reshape(-1, 350)
-Xtest_raw = np.load(os.path.join(dir, "LPC_RNN_X_test.npy"))[:, 1:].astype(np.float32).reshape(-1, 350)
+train = np.load(os.path.join("/home/datasets/public/formants/vtr/shua_processed/Outputs/Train_tracker.npy"), allow_pickle=True)
+test = np.load(os.path.join("/home/datasets/public/formants/vtr/shua_processed/Outputs/Train_tracker.npy"), allow_pickle=True)
 
-Ytrain_raw = np.load(os.path.join(dir, "LPC_RNN_Y_train.npy"))[:, 1:].astype(np.float32).reshape(-1, 4)
-Ytest_raw = np.load(os.path.join(dir, "LPC_RNN_Y_test.npy"))[:, 1:].astype(np.float32).reshape(-1, 4)
+x_train = train[:, 5:]
+y_train = train[:,1:5]
+x_test = test[:, 5:]
+y_test = test[:,1:5]
+
+x_train = pd.DataFrame(x_train).apply(pd.to_numeric, errors='coerce').to_numpy()
+x_train = np.nan_to_num(x_train, nan=0.0)
+
+x_test = pd.DataFrame(x_test).apply(pd.to_numeric, errors='coerce').to_numpy()
+x_test = np.nan_to_num(x_test, nan=0.0)
 
 seq = 20
-Xtrain = Xtrain_raw[:int(Xtrain_raw.shape[0]/seq)*seq, ].reshape(-1, seq, 350)
-Ytrain = Ytrain_raw[:int(Ytrain_raw.shape[0]/seq)*seq, ].reshape(-1, seq, 4)
+Xtrain = x_train[:int(x_train.shape[0]/seq)*seq, ].reshape(-1, seq, 350)
+Ytrain = y_train[:int(y_train.shape[0]/seq)*seq, ].reshape(-1, seq, 4)
 
-Xtest = Xtest_raw[:int(Xtest_raw.shape[0]/seq)*seq, ].reshape(-1, seq, 350)
-Ytest = Ytest_raw[:int(Ytest_raw.shape[0]/seq)*seq, ].reshape(-1, seq, 4)
+Xtest = x_test[:int(x_test.shape[0]/seq)*seq, ].reshape(-1, seq, 350)
+Ytest = y_test[:int(y_test.shape[0]/seq)*seq, ].reshape(-1, seq, 4)
+print(Xtrain.dtype)
+Ytrain = np.array(Ytrain, dtype=np.float32)
+Ytest = np.array(Ytest, dtype=np.float32)
 
 
 class LSTM(nn.Module):
@@ -68,7 +79,7 @@ def train(model, loss, optimizer, inputs, labels):
 
 def predict(model, inputs):
     inputs = Variable(inputs)
-    logits = model.forward(inputs.to())
+    logits = model.forward(inputs.to(device))
     return logits.data.cpu().numpy()
 
 
@@ -96,8 +107,8 @@ print("Starting training ")
 for i in range(epochs):
     cost = 0.0
     for j in range(n_batches):
-        Xbatch = torch.from_numpy(Xtrain[j*batchSize:(j+1)*batchSize])
-        Ybatch = torch.from_numpy(Ytrain[j*batchSize:(j+1)*batchSize])
+        Xbatch = torch.from_numpy(Xtrain[j*batchSize:(j+1)*batchSize]).float()
+        Ybatch = torch.from_numpy(Ytrain[j*batchSize:(j+1)*batchSize]).float()
         cost += train(model, loss, optimizer, Xbatch, Ybatch)
     loss1 = 0.0
     loss2 = 0.0
@@ -112,7 +123,7 @@ for i in range(epochs):
     list_3 = []
     list_4 = []
     print('predicting...')
-    Ypred = predict(model, torch.from_numpy(Xtest))
+    Ypred = predict(model, torch.from_numpy(Xtest).float())
     for k in range(0, len(Ytest)):
         for p in range(seq):
             # print(y_hat[i])

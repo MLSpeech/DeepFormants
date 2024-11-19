@@ -7,15 +7,18 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 from torch import optim
 import numpy as np
+import os 
 
 from torch.utils.data import DataLoader
-from datasets import Dataset
-output_dir = "/Users/olgaseleznova/Work/Speech_recognition/DeepFormants/data/Outputs/Estimator/"
-train_data = np.load(output_dir+"Train__output.npy")
-test_data = np.load(output_dir+"Test__output.npy")
+# from datasets import Dataset
+output_dir = "Trained_models/Estimator/LPC/VTR_train/"
+train_data = np.load("/home/datasets/public/formants/vtr/shua_processed/Outputs/Train.npy", allow_pickle=True)
+test_data = np.load("/home/datasets/public/formants/vtr/shua_processed/Outputs/Test.npy", allow_pickle=True)
+# train_data = np.load("/home/datasets/public/formants/vtr/shua_processed/Outputs/timitTrain.npy", allow_pickle=True)
+# test_data = np.load("/home/datasets/public/formants/vtr/shua_processed/Outputs/timitTest.npy", allow_pickle=True)
 print(train_data)
 print(test_data)
-
+os.makedirs(output_dir, exist_ok=True )
 Xtrain = train_data[:, 5:].astype(np.float32)
 Ytrain = train_data[:, 1:5].astype(np.float32)
 Xtest = test_data[:, 5:].astype(np.float32)
@@ -43,8 +46,6 @@ class Net(nn.Module):
         x = torch.sigmoid(self.Dense2(x))
         x = torch.sigmoid(self.Dense3(x))
         return self.out(x)
-
-
 
 
 loss = nn.L1Loss()

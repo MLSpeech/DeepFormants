@@ -28,7 +28,7 @@ def build_data(wav,begin=None,end=None):
     data = np.fromstring(dstr, np.int16)
     if begin is not None and end is not None:
         #return data[begin*16000:end*16000] #numpy 1.11.0
-        return data[np.int(begin*16000):np.int(end*16000)] #numpy 1.14.0
+        return data[np.int32(begin*16000):np.int32(end*16000)] #numpy 1.14.0
     X = []
     l = len(data)
     for i in range(0, l-100, 160):
@@ -93,8 +93,8 @@ def periodogram(x, nfft=None, fs=1):
     else:
         pn = (nfft + 1 )/ 2
 
-    fgrid = np.linspace(0, fs * 0.5, pn)
-    return pxx[:pn] / (n * fs), fgrid
+    fgrid = np.linspace(0, fs * 0.5, int(pn))
+    return pxx[:int(pn)] / (n * fs), fgrid
 
 
 def arspec(x, order, nfft=None, fs=1):
@@ -142,7 +142,7 @@ def arspec(x, order, nfft=None, fs=1):
     else:
         pn = (nfft + 1 )/ 2
 
-    px = 1 / np.fft.fft(a, nfft)[:pn]
+    px = 1 / np.fft.fft(a, nfft)[:int(pn)]
     pxx = np.real(np.conj(px) * px)
     pxx /= fs / e
     fx = np.linspace(0, fs * 0.5, pxx.size)
@@ -225,7 +225,7 @@ def specPS(input_wav,pitch):
         samps = N/pitch
         if samps == 0:
             samps = 1
-        frames = N/samps
+        frames = int(N/samps)
         data = input_wav[0:frames]
         specs = periodogram(data,nfft=4096)
         for i in range(1,int(samps)):
@@ -248,7 +248,7 @@ def specPS(input_wav,pitch):
         return ceps[:50]
 
 
-def build_single_feature_row(data, Atal):
+def build_single_feature_row(data, Atal=False):
     lpcs = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
     arr = []
     periodo = specPS(data, 50)
@@ -260,7 +260,7 @@ def build_single_feature_row(data, Atal):
             ars = arspecs(data, j)
         arr.extend(ars)
     for i in range(len(arr)):
-        if np.isnan(np.float(arr[i])):
+        if np.isnan(float(arr[i])):
             arr[i] = 0.0
     return arr
 
