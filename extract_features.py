@@ -7,8 +7,8 @@ import os
 from os import listdir
 from os.path import isfile, join
 import math
-from scipy.fftpack.realtransforms import dct
-from scipy.signal import lfilter, hamming
+from scipy.fftpack import dct
+from scipy.signal import lfilter
 from copy import deepcopy
 from scipy.fftpack import fft, ifft
 # from scikits.talkbox.linpred import lpc
@@ -25,7 +25,7 @@ def build_data(wav,begin=None,end=None):
     wav_in_num_samples = wav_in_file.getnframes()
     N = wav_in_file.getnframes()
     dstr = wav_in_file.readframes(N)
-    data = np.fromstring(dstr, np.int16)
+    data = np.frombuffer(dstr, np.int16)
     if begin is not None and end is not None:
         #return data[begin*16000:end*16000] #numpy 1.11.0
         return data[np.int32(begin*16000):np.int32(end*16000)] #numpy 1.14.0

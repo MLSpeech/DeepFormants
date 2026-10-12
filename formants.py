@@ -1,25 +1,47 @@
 
 import extract_features as features
 import argparse
+import numpy as np
 from helpers.textgrid import *
 from helpers.utilities import *
 import shutil
 
+from load_pytorch_lpc_estimator import predict_from_features as estimate_from_features
+from load_pytorch_lpc_tracker import predict_from_features as track_from_features
 
-def predict_from_times(wav_filename, preds_filename, begin, end):
-    tmp_features_filename = tempfile._get_default_tempdir() + "/" + next(tempfile._get_candidate_names()) + ".txt"
-    print(tmp_features_filename)
+
+def track(wav_filename, preds_filename, backend="lpc", model_path=None):
+    """Track F1-F4 every 10ms across the whole file."""
+    if backend == "crnn":
+        # The CRNN reads the waveform directly, it does not use the LPC feature CSV.
+        from pytorchFormants.CRNN import crnn_inference
+        crnn_inference.predict_from_wav(wav_filename, preds_filename,
+                                        model_path or crnn_inference.DEFAULT_MODEL)
+        return
+
+    tmp_features_filename = generate_tmp_filename("features")
+    features.create_features(wav_filename, tmp_features_filename)
+    if model_path:
+        track_from_features(tmp_features_filename, preds_filename, model_path)
+    else:
+        track_from_features(tmp_features_filename, preds_filename)
+
+
+def predict_from_times(wav_filename, preds_filename, begin, end, backend="lpc", model_path=None):
 
     if begin > 0.0 or end > 0.0:
+        tmp_features_filename = generate_tmp_filename("features")
         features.create_features(wav_filename, tmp_features_filename, begin, end)
-        # easy_call("th load_estimation_model.lua " + tmp_features_filename + ' ' + preds_filename)
-        easy_call(f"python load_pytorch_lpc_estimator.py {tmp_features_filename} {preds_filename}")       
+        if model_path:
+            estimate_from_features(tmp_features_filename, preds_filename, model_path)
+        else:
+            estimate_from_features(tmp_features_filename, preds_filename)
     else:
-        features.create_features(wav_filename, tmp_features_filename)
-        easy_call("th load_tracking_model.lua " + tmp_features_filename + ' ' + preds_filename)
+        track(wav_filename, preds_filename, backend, model_path)
 
 
-def predict_from_textgrid(wav_filename, preds_filename, textgrid_filename, textgrid_tier):
+def predict_from_textgrid(wav_filename, preds_filename, textgrid_filename, textgrid_tier,
+                          model_path=None):
 
     print(wav_filename)
 
@@ -35,23 +57,29 @@ def predict_from_textgrid(wav_filename, preds_filename, textgrid_filename, textg
     tier_names = textgrid.tierNames()
 
     if textgrid_tier in tier_names:
-        tier_index = tier_names.index(textgrid_tier)
-        # run over all intervals in the tier
-        for interval in textgrid[tier_index]:
-            if re.search(r'\S', interval.mark()):
-                tmp_features_filename = generate_tmp_filename("features")
-                tmp_preds = generate_tmp_filename("preds")
-                features.create_features(wav_filename, tmp_features_filename, interval.xmin(), interval.xmax())
-                easy_call("th load_estimation_model.lua " + tmp_features_filename + ' ' + tmp_preds)
-                csv_append_row(tmp_preds, preds_filename)
+        tier = textgrid[tier_names.index(textgrid_tier)]
     else:  # process first tier
-        for interval in textgrid[0]:
-            if re.search(r'\S', interval.mark()):
-                tmp_features_filename = generate_tmp_filename("features")
-                tmp_preds = generate_tmp_filename("preds")
-                features.create_features(wav_filename, tmp_features_filename, interval.xmin(), interval.xmax())
-                easy_call("th load_estimation_model.lua " + tmp_features_filename + ' ' + tmp_preds)
-                csv_append_row(tmp_preds, preds_filename)
+        tier = textgrid[0]
+
+    # Collect every interval into a single feature file so the model is loaded once.
+    rows = []
+    for interval in tier:
+        if re.search(r'\S', interval.mark()):
+            tmp_features_filename = generate_tmp_filename("features")
+            rows.append(features.create_features(wav_filename, tmp_features_filename,
+                                                 interval.xmin(), interval.xmax()))
+
+    if not rows:
+        print("No non-empty intervals found, nothing to predict.")
+        return
+
+    tmp_all_features = generate_tmp_filename("features")
+    np.savetxt(tmp_all_features, np.asarray(rows), delimiter=",", fmt="%s")
+    if model_path:
+        estimate_from_features(tmp_all_features, preds_filename, model_path)
+    else:
+        estimate_from_features(tmp_all_features, preds_filename)
+
 
 if __name__ == "__main__":
     # parse arguments
@@ -62,10 +90,15 @@ if __name__ == "__main__":
     parser.add_argument('--textgrid_tier', default='', help="a tier name with portion to process (default first tier)")
     parser.add_argument('--begin', help="beginning time in the WAV file", default=0.0, type=float)
     parser.add_argument('--end', help="end time in the WAV file", default=-1.0, type=float)
+    parser.add_argument('--backend', default='lpc', choices=['lpc', 'crnn'],
+                        help="tracking model: 'lpc' (LSTM over LPC features) or 'crnn' (conv frontend + LSTM "
+                             "over the spectrogram). Ignored for estimation.")
+    parser.add_argument('--model', default='', help="override the model checkpoint for the chosen backend "
+                                                    "(required for --backend crnn, which ships no weights)")
     args = parser.parse_args()
 
     if args.textgrid_filename:
-        predict_from_textgrid(args.wav_file, args.formants_file, args.textgrid_filename, args.textgrid_tier)
+        predict_from_textgrid(args.wav_file, args.formants_file, args.textgrid_filename, args.textgrid_tier,
+                              args.model)
     else:
-        predict_from_times(args.wav_file, args.formants_file, args.begin, args.end)
-
+        predict_from_times(args.wav_file, args.formants_file, args.begin, args.end, args.backend, args.model)
