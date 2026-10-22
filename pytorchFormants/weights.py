@@ -1,9 +1,11 @@
 """Resolve model checkpoints, downloading from Hugging Face when needed.
 
-Three of the four checkpoints are small enough to live in the repository. The
-CNN estimator is not -- its first dense layer alone holds 53.5M parameters, so
-the file is ~215MB and exceeds GitHub's 100MB per-file limit. Anything missing
-locally is fetched from the Hub and cached.
+All four checkpoints currently live in the repository, so this is only a
+fallback for weights hosted elsewhere -- a larger experimental model, say.
+
+This handles *model weights only*. The corpora used to train them (VTR over
+TIMIT, Hillenbrand, Clopper) are licensed to us and are not redistributed here
+or anywhere else; build features locally from your own copy of each corpus.
 
 Override the repo with the DEEPFORMANTS_HF_REPO environment variable, or point
 any script at an explicit file with its --model flag to bypass this entirely.

@@ -131,6 +131,17 @@ python evaluate.py --backend rnn --data .../Outputs/Test_tracker.npy \
 
 ## Training
 
+### A note on the data
+
+The corpora used here are licensed to us and are **not ours to redistribute**: VTR
+annotations over TIMIT audio (LDC), Hillenbrand, and Clopper. Neither the audio nor any
+features derived from it are published with this repository, and `.gitignore` is set up to
+keep derived `.npy` files out of commits. Obtain the corpora yourself, then build the
+features locally with the scripts below.
+
+The dataset paths shown are the defaults on our machines; pass your own with the
+corresponding flags.
+
 Each model has a matching `*_train.py` that takes its dataset paths as arguments, reports
 per-formant test error in Hz, and writes a checkpoint only when the model improves. Add
 `--wandb` to any of them to log to Weights & Biases.
