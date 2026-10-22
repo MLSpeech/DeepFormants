@@ -30,8 +30,11 @@ import torch.nn.functional as F
 from torch import optim
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+from build_cnn_data import speaker_of
 from cnn_model import build_model
+from splits import describe, holdout_mask
 
 
 def load_xy(x_path, y_path):
@@ -41,7 +44,13 @@ def load_xy(x_path, y_path):
     Y_raw = np.load(y_path, allow_pickle=True)
     # Y rows are [name, F1, F2, F3, F4]; -1 marks an unannotated formant.
     Y = np.array([[float(v) for v in r[1:5]] for r in Y_raw], dtype=np.float32)
-    return X, Y
+    names = np.array([str(r[0]) for r in Y_raw])
+    return X, Y, names
+
+
+def corpus_speaker(name):
+    """Speaker key qualified by corpus, so ids cannot collide across corpora."""
+    return f"{name.split('_')[0]}:{speaker_of(name)}"
 
 
 def masked_l1(pred, target):
@@ -76,8 +85,19 @@ def main():
     parser.add_argument('--arch', default='keras', choices=['keras', 'legacy'])
     parser.add_argument('--epochs', default=80, type=int)
     parser.add_argument('--batch_size', default=32, type=int)
-    parser.add_argument('--lr', default=0.01, type=float)
+    # Adagrad at the original 0.01 collapses on roughly half of seeds: the ReLU
+    # stack saturates in the first epoch and train loss sticks at ~0.26 forever,
+    # i.e. the model just predicts a constant. 0.003 trained cleanly on every
+    # seed tried (0-3). See --collapse_loss below for the guard.
+    parser.add_argument('--lr', default=0.003, type=float)
+    parser.add_argument('--collapse_loss', default=0.25, type=float,
+                        help="abort if train loss is still above this after "
+                             "--collapse_after epochs, which means the net has died")
+    parser.add_argument('--collapse_after', default=5, type=int)
     parser.add_argument('--seed', default=0, type=int)
+    parser.add_argument('--val_frac', default=0.15, type=float,
+                        help="fraction of TRAINING speakers held out to choose the "
+                             "checkpoint; the test split is scored once at the end")
     parser.add_argument('--wandb', action='store_true')
     args = parser.parse_args()
 
@@ -89,9 +109,16 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"device: {device}")
 
-    Xtrain, Ytrain = load_xy(args.train_X, args.train_Y)
-    Xtest, Ytest = load_xy(args.test_X, args.test_Y)
-    print(f"train {Xtrain.shape}  test {Xtest.shape}")
+    Xall, Yall, names = load_xy(args.train_X, args.train_Y)
+    keys = [corpus_speaker(n) for n in names]
+    va_mask = holdout_mask(keys, args.val_frac, args.seed)
+    describe("cnn", [k for k, v in zip(keys, va_mask) if not v],
+             [k for k, v in zip(keys, va_mask) if v])
+
+    Xtrain, Ytrain = Xall[~va_mask], Yall[~va_mask]
+    Xval, Yval = Xall[va_mask], Yall[va_mask]
+    Xtest, Ytest, _ = load_xy(args.test_X, args.test_Y)
+    print(f"train {Xtrain.shape}  val {Xval.shape}  test {Xtest.shape}")
     print(f"annotated per formant - train {(Ytrain > 0).sum(axis=0).tolist()}, "
           f"test {(Ytest > 0).sum(axis=0).tolist()}")
 
@@ -124,22 +151,40 @@ def main():
             optimizer.step()
             cost += loss.item()
 
-        errors = evaluate(model, Xtest, Ytest, device)
+        epoch_loss = cost / n_batches
+        if epoch == args.collapse_after and epoch_loss > args.collapse_loss:
+            raise SystemExit(
+                f"Training collapsed: train loss {epoch_loss:.4f} after {epoch + 1} epochs "
+                f"is above --collapse_loss {args.collapse_loss}. The ReLU stack has "
+                f"saturated and the model is predicting a constant. Retry with a lower "
+                f"--lr or a different --seed.")
+
+        # Selection uses the held-out validation speakers only.
+        errors = evaluate(model, Xval, Yval, device)
         score = float(np.nanmean(errors))
-        print(f"Epoch {epoch}: train loss {cost / n_batches:.4f} | test MAE Hz "
+        print(f"Epoch {epoch}: train loss {cost / n_batches:.4f} | val MAE Hz "
               f"F1 {errors[0]:.1f} F2 {errors[1]:.1f} F3 {errors[2]:.1f} F4 {errors[3]:.1f} "
               f"| mean {score:.1f}")
 
         if run is not None:
-            run.log({"train_loss": cost / n_batches, "mean_abs_error_hz": score,
-                     "F1": errors[0], "F2": errors[1], "F3": errors[2], "F4": errors[3]})
+            run.log({"train_loss": cost / n_batches, "val_mean_abs_error_hz": score,
+                     "val_F1": errors[0], "val_F2": errors[1],
+                     "val_F3": errors[2], "val_F4": errors[3]})
 
         if score < best:
             best = score
             torch.save(model.state_dict(), args.output)
-            print(f"  saved {args.output} (mean test MAE {best:.1f} Hz)")
+            print(f"  saved {args.output} (mean val MAE {best:.1f} Hz)")
 
-    print(f"Best mean test MAE: {best:.1f} Hz -> {args.output}")
+    print(f"Best mean val MAE: {best:.1f} Hz -> {args.output}")
+
+    # Test is scored exactly once, with the checkpoint chosen on validation.
+    model.load_state_dict(torch.load(args.output, map_location=device))
+    errors = evaluate(model, Xtest, Ytest, device)
+    print(f"TEST (held out, scored once): F1 {errors[0]:.1f} F2 {errors[1]:.1f} "
+          f"F3 {errors[2]:.1f} F4 {errors[3]:.1f} | mean {np.nanmean(errors):.1f}")
+    if run is not None:
+        run.log({"test_mean_abs_error_hz": float(np.nanmean(errors))})
 
 
 if __name__ == "__main__":
