@@ -79,23 +79,49 @@ python formants.py data/Example.wav data/examplePredictions.csv --textgrid_filen
           --textgrid_tier VOWEL
 ```
 
+`data/Example.TextGrid` is a small illustrative grid marking two windows, not a phonetic
+annotation; its first interval is the same 1.2-1.3 window used above, so both commands
+agree on that vowel.
+
 For formant tracking, just call the script with the wav file and output filename:
 
 ```
 python formants.py data/Example.wav data/ExamplePredictions.csv
 ```
 
-This uses the LSTM tracker over LPC features (`--backend rnn`, the default).
+### Running each of the four models
 
-To use a different model, pass `--backend`:
+Estimation accepts `ff` or `cnn`, tracking accepts `rnn` or `crnn`, and a backend that does
+not match the task is rejected rather than silently ignored. Each of these runs as-is on
+the bundled example file:
 
 ```
-python formants.py data/Example.wav preds.csv --begin 1.2 --end 1.3 --backend cnn
-python formants.py data/Example.wav preds.csv --backend crnn
+# Estimation - one F1-F4 for the 1.2-1.3s window
+python formants.py data/Example.wav preds_ff.csv   --begin 1.2 --end 1.3 --backend ff
+python formants.py data/Example.wav preds_cnn.csv  --begin 1.2 --end 1.3 --backend cnn
+
+# Tracking - F1-F4 every 10ms, 231 frames for this file
+python formants.py data/Example.wav preds_rnn.csv  --backend rnn
+python formants.py data/Example.wav preds_crnn.csv --backend crnn
 ```
 
-Estimation accepts `ff` or `cnn`; tracking accepts `rnn` or `crnn`. Passing a backend that
-does not match the task is rejected rather than silently ignored.
+Omitting `--backend` gives `ff` for estimation and `rnn` for tracking. Expected output on
+the example file, in Hz:
+
+```
+                  F1      F2      F3      F4
+ff             458.5  1642.7  2510.4  3689.1
+cnn            465.1  1763.5  2552.7  3619.8
+rnn    (frame 0)  659.4  1763.5  2798.1  4080.7
+crnn   (frame 0)  580.8  1603.5  2507.5  3914.7
+```
+
+To use the retrained CRNN instead of the converted original:
+
+```
+python formants.py data/Example.wav preds.csv --backend crnn \
+          --model pytorchFormants/CRNN/CRNN_tracker_retrained.pt
+```
 
 
 ## Results
