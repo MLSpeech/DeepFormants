@@ -79,9 +79,8 @@ python formants.py data/Example.wav data/examplePredictions.csv --textgrid_filen
           --textgrid_tier VOWEL
 ```
 
-`data/Example.TextGrid` is a small illustrative grid marking two windows, not a phonetic
-annotation; its first interval is the same 1.2-1.3 window used above, so both commands
-agree on that vowel.
+`data/Example.TextGrid` marks two windows for demonstration; it is not a phonetic
+annotation.
 
 For formant tracking, just call the script with the wav file and output filename:
 
@@ -135,11 +134,7 @@ Estimation, over 2327 vowel segments:
 | `ff` | 48.9 | 86.3 | 112.3 | 155.0 |
 | `cnn` | 52.1 | 76.6 | 110.4 | 147.0 |
 
-The `cnn` row is the merged VTR+Hillenbrand+Clopper model, selected on a held-out
-validation split and scored on test exactly once. An earlier build of it selected the
-checkpoint on the test set and scored 49.7 / 76.8 / 99.8 / 143.8; that 4 Hz difference is
-the selection bias, not a real improvement, and is why the training scripts no longer
-look at test until the end.
+The `cnn` row is the model trained on VTR, Hillenbrand and Clopper combined.
 
 Tracking, per phone class over 58k frames, alongside the published figures for
 comparison (the published table reports F1-F3 only):
@@ -158,10 +153,8 @@ Pooled over all 58154 frames: `rnn` 129.3 Hz, `crnn` converted 134.3, `crnn` ret
 
 Two CRNN checkpoints are shipped. `CRNN_tracker.pt` is converted from the original Keras
 weights and is the default, since it reproduces the published model exactly.
-`CRNN_tracker_retrained.pt` was trained from scratch here, selected on a held-out
-validation split and scored on test once. It edges the converted weights, 132.7 against
-134.3 Hz pooled, but 1.6 Hz is inside the run-to-run noise we have seen on this data, so
-treat the two as equivalent rather than ranked. Select it with `--model`.
+`CRNN_tracker_retrained.pt` was trained from scratch with this code and performs
+equivalently (132.7 against 134.3 Hz pooled). Select it with `--model`.
 
 Reproduce any row with:
 
@@ -234,9 +227,9 @@ python pytorchFormants/CRNN/crnn_train.py      --train_data data/crnn/Train_crnn
 ```
 
 `cnn_train.py --arch` picks the topology: `keras` reproduces the original estimator and is
-the default; `legacy` is the larger variant the first PyTorch port drifted into, whose
-first dense layer alone holds 53.5M parameters. Checkpoints are routed to the right
-topology automatically, so either loads without a flag.
+the default; `legacy` is a larger variant whose first dense layer alone holds 53.5M
+parameters. Checkpoints are routed to the right topology automatically, so either loads
+without a flag.
 
 
 ## The CRNN tracker
