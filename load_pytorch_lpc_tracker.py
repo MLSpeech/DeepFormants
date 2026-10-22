@@ -5,7 +5,11 @@ import sys
 import os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_MODEL = os.path.join(HERE, "pytorchFormants", "Tracker", "LPC_RNN.pt")
+sys.path.append(os.path.join(HERE, "pytorchFormants"))
+
+from weights import resolve
+
+DEFAULT_MODEL = None  # resolved via pytorchFormants.weights
 
 
 # Same architecture as pytorchFormants/Tracker/LPC_tracker.py
@@ -23,8 +27,7 @@ class LSTM(torch.nn.Module):
 
 
 def load_model(model_path, device):
-    if not os.path.exists(model_path):
-        raise FileNotFoundError(f"Model file not found at {model_path}")
+    model_path = resolve('rnn', model_path)
     model = LSTM().to(device)
     model.load_state_dict(torch.load(model_path, map_location=device))
     model.eval()

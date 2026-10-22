@@ -18,19 +18,18 @@ import numpy as np
 import torch
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from cnn_model import build_model, infer_arch
 from spec_features import image_from_wav
+from weights import resolve
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_MODEL = os.path.join(HERE, "CNN_estimate.pt")
+DEFAULT_MODEL = None  # resolved via pytorchFormants.weights
 
 
 def load_model(model_path, device):
-    if not os.path.exists(model_path):
-        raise FileNotFoundError(
-            f"Model file not found at {model_path}. Train one with cnn_train.py, "
-            "or fetch the published weights (see README).")
+    model_path = resolve('cnn', model_path)
     state = torch.load(model_path, map_location=device)
     model = build_model(infer_arch(state)).to(device)
     model.load_state_dict(state)

@@ -16,19 +16,18 @@ import numpy as np
 import torch
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from crnn_feats import SEQ_LEN, group_sequences, patches_from_wav
 from crnn_model import CRNN
+from weights import resolve
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_MODEL = os.path.join(HERE, "CRNN_tracker.pt")
+DEFAULT_MODEL = None  # resolved via pytorchFormants.weights
 
 
 def load_model(model_path, device):
-    if not os.path.exists(model_path):
-        raise FileNotFoundError(
-            f"Model file not found at {model_path}. Convert the original weights with "
-            "convert_keras_weights.py, or train one with crnn_train.py.")
+    model_path = resolve('crnn', model_path)
     model = CRNN().to(device)
     model.load_state_dict(torch.load(model_path, map_location=device))
     model.eval()
