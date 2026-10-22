@@ -34,9 +34,15 @@ original Torch7/Lua loaders are no longer needed. LPC analysis is done by the bu
 
 Dependencies:
 ```
-pip install torch numpy scipy
+pip install -r requirements.txt
 ```
-`sox` is used to resample input audio to 16 kHz mono:
+That installs `torch`, `numpy` and `scipy`, which is everything the four models need for
+both training and inference. `requirements.txt` also lists three optional extras, commented
+out: `h5py` (only to re-convert the original Keras CRNN weights), `huggingface_hub` (only
+as a fallback for a checkpoint that is not committed) and `wandb` (only for the `--wandb`
+training flag).
+
+`sox` is used to resample input audio to 16 kHz mono and is not installable with pip:
 ```
 sudo apt-get install sox
 ```
