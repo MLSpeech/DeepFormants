@@ -22,18 +22,29 @@ import torch.nn as nn
 from torch import optim
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from rnn_model import LSTMTracker
+from splits import describe, split_rows, vtr_speaker
 
 
-def load_split(path, seq_len):
+def _chunk(X, Y, seq_len):
+    n = (len(X) // seq_len) * seq_len
+    return X[:n].reshape(-1, seq_len, X.shape[1]), Y[:n].reshape(-1, seq_len, 4)
+
+
+def load_raw(path):
     if not os.path.exists(path):
         raise FileNotFoundError(f"Not found: {path}. Run create_VTR_feats.py first.")
     data = np.load(path, allow_pickle=True)
     X = np.nan_to_num(data[:, 5:].astype(np.float32))
     Y = data[:, 1:5].astype(np.float32)
-    n = (len(X) // seq_len) * seq_len
-    return X[:n].reshape(-1, seq_len, X.shape[1]), Y[:n].reshape(-1, seq_len, 4)
+    return data[:, 0], X, Y
+
+
+def load_split(path, seq_len):
+    _, X, Y = load_raw(path)
+    return _chunk(X, Y, seq_len)
 
 
 def masked_l1(pred, target):
@@ -69,6 +80,9 @@ def main():
     parser.add_argument('--seq_len', default=20, type=int)
     parser.add_argument('--lr', default=0.01, type=float)
     parser.add_argument('--seed', default=0, type=int)
+    parser.add_argument('--val_frac', default=0.15, type=float,
+                        help="fraction of TRAINING speakers held out to choose the "
+                             "checkpoint; the test split is scored once at the end")
     parser.add_argument('--wandb', action='store_true')
     args = parser.parse_args()
 
@@ -81,9 +95,15 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"device: {device}")
 
-    Xtrain, Ytrain = load_split(args.train_data, args.seq_len)
+    names, Xall, Yall = load_raw(args.train_data)
+    tr_mask, va_mask = split_rows(names, args.val_frac, args.seed)
+    describe("rnn", [vtr_speaker(n) for n in names[tr_mask]],
+             [vtr_speaker(n) for n in names[va_mask]])
+
+    Xtrain, Ytrain = _chunk(Xall[tr_mask], Yall[tr_mask], args.seq_len)
+    Xval, Yval = _chunk(Xall[va_mask], Yall[va_mask], args.seq_len)
     Xtest, Ytest = load_split(args.test_data, args.seq_len)
-    print(f"train {Xtrain.shape}  test {Xtest.shape}")
+    print(f"train {Xtrain.shape}  val {Xval.shape}  test {Xtest.shape}")
 
     run = None
     if args.wandb:
@@ -115,22 +135,32 @@ def main():
             optimizer.step()
             cost += loss.item()
 
-        errors = evaluate(model, Xtest, Ytest, device)
+        # Selection uses the held-out validation speakers only.
+        errors = evaluate(model, Xval, Yval, device)
         score = float(np.nanmean(errors))
-        print(f"Epoch {epoch}: train loss {cost / n_batches:.4f} | test MAE Hz "
+        print(f"Epoch {epoch}: train loss {cost / n_batches:.4f} | val MAE Hz "
               f"F1 {errors[0]:.1f} F2 {errors[1]:.1f} F3 {errors[2]:.1f} F4 {errors[3]:.1f} "
               f"| mean {score:.1f}")
 
         if run is not None:
-            run.log({"train_loss": cost / n_batches, "mean_abs_error_hz": score,
-                     "F1": errors[0], "F2": errors[1], "F3": errors[2], "F4": errors[3]})
+            run.log({"train_loss": cost / n_batches, "val_mean_abs_error_hz": score,
+                     "val_F1": errors[0], "val_F2": errors[1],
+                     "val_F3": errors[2], "val_F4": errors[3]})
 
         if score < best:
             best = score
             torch.save(model.state_dict(), args.output)
-            print(f"  saved {args.output} (mean test MAE {best:.1f} Hz)")
+            print(f"  saved {args.output} (mean val MAE {best:.1f} Hz)")
 
-    print(f"Best mean test MAE: {best:.1f} Hz -> {args.output}")
+    print(f"Best mean val MAE: {best:.1f} Hz -> {args.output}")
+
+    # Test is scored exactly once, with the checkpoint chosen on validation.
+    model.load_state_dict(torch.load(args.output, map_location=device))
+    errors = evaluate(model, Xtest, Ytest, device)
+    print(f"TEST (held out, scored once): F1 {errors[0]:.1f} F2 {errors[1]:.1f} "
+          f"F3 {errors[2]:.1f} F4 {errors[3]:.1f} | mean {np.nanmean(errors):.1f}")
+    if run is not None:
+        run.log({"test_mean_abs_error_hz": float(np.nanmean(errors))})
 
 
 if __name__ == "__main__":

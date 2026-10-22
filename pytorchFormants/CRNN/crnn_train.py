@@ -22,9 +22,11 @@ import torch.nn as nn
 from torch import optim
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from crnn_feats import N_FREQ, N_TIME, SEQ_LEN
 from crnn_model import CRNN
+from splits import describe, split_items, vtr_speaker
 
 
 def load_split(path):
@@ -92,6 +94,9 @@ def main():
     parser.add_argument('--seq_len', default=SEQ_LEN, type=int)
     parser.add_argument('--lr', default=0.01, type=float)
     parser.add_argument('--seed', default=0, type=int)
+    parser.add_argument('--val_frac', default=0.15, type=float,
+                        help="fraction of TRAINING speakers held out to choose the "
+                             "checkpoint; the test split is scored once at the end")
     parser.add_argument('--wandb', action='store_true')
     args = parser.parse_args()
 
@@ -104,10 +109,15 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"device: {device}")
 
-    train_entries = load_split(args.train_data)
+    all_entries = list(load_split(args.train_data))
+    train_entries, val_entries = split_items(all_entries, args.val_frac, args.seed)
+    describe("crnn", [vtr_speaker(e[0]) for e in train_entries],
+             [vtr_speaker(e[0]) for e in val_entries])
+
     test_entries = load_split(args.test_data)
     Xtrain, Ytrain = make_sequences(train_entries, args.seq_len)
-    print(f"train sequences: {Xtrain.shape}, test utterances: {len(test_entries)}")
+    print(f"train sequences: {Xtrain.shape}, val utterances: {len(val_entries)}, "
+          f"test utterances: {len(test_entries)}")
 
     run = None
     if args.wandb:
@@ -139,23 +149,33 @@ def main():
             optimizer.step()
             cost += loss.item()
 
-        errors = evaluate(model, test_entries, device, args.seq_len)
+        # Selection uses the held-out validation speakers only.
+        errors = evaluate(model, val_entries, device, args.seq_len)
         score = float(np.nanmean(errors))
         print(f"Epoch {epoch}: train loss {cost / n_batches:.4f} | "
-              f"test MAE Hz F1 {errors[0]:.1f} F2 {errors[1]:.1f} "
-              f"F3 {errors[2]:.1f} F4 {errors[3]:.1f} | mean {score:.1f}")
+              f"val MAE Hz F1 {errors[0]:.1f} F2 {errors[1]:.1f} "
+              f"F3 {errors[2]:.1f} F4 {errors[3]:.1f} | mean {score:.1f}", flush=True)
 
         if run is not None:
-            run.log({"train_loss": cost / n_batches, "mean_abs_error_hz": score,
-                     "F1": errors[0], "F2": errors[1], "F3": errors[2], "F4": errors[3]})
+            run.log({"train_loss": cost / n_batches, "val_mean_abs_error_hz": score,
+                     "val_F1": errors[0], "val_F2": errors[1],
+                     "val_F3": errors[2], "val_F4": errors[3]})
 
         # Only overwrite the checkpoint when the model actually improved.
         if score < best:
             best = score
             torch.save(model.state_dict(), args.output)
-            print(f"  saved {args.output} (mean test MAE {best:.1f} Hz)")
+            print(f"  saved {args.output} (mean val MAE {best:.1f} Hz)", flush=True)
 
-    print(f"Best mean test MAE: {best:.1f} Hz -> {args.output}")
+    print(f"Best mean val MAE: {best:.1f} Hz -> {args.output}")
+
+    # Test is scored exactly once, with the checkpoint chosen on validation.
+    model.load_state_dict(torch.load(args.output, map_location=device))
+    errors = evaluate(model, test_entries, device, args.seq_len)
+    print(f"TEST (held out, scored once): F1 {errors[0]:.1f} F2 {errors[1]:.1f} "
+          f"F3 {errors[2]:.1f} F4 {errors[3]:.1f} | mean {np.nanmean(errors):.1f}")
+    if run is not None:
+        run.log({"test_mean_abs_error_hz": float(np.nanmean(errors))})
 
 
 if __name__ == "__main__":
