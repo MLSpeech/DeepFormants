@@ -17,40 +17,46 @@ import torch
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from crnn_feats import spectrogram_from_wav
+from crnn_feats import SEQ_LEN, group_sequences, patches_from_wav
 from crnn_model import CRNN
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_MODEL = os.path.join(HERE, "CRNN_tracker.pt")
 
 
-def load_model(model_path, device, n_bins):
+def load_model(model_path, device):
     if not os.path.exists(model_path):
         raise FileNotFoundError(
-            f"Model file not found at {model_path}. Train one with crnn_train.py, "
-            "or pass an explicit model path.")
-    model = CRNN(n_bins=n_bins).to(device)
+            f"Model file not found at {model_path}. Convert the original weights with "
+            "convert_keras_weights.py, or train one with crnn_train.py.")
+    model = CRNN().to(device)
     model.load_state_dict(torch.load(model_path, map_location=device))
     model.eval()
     return model
+
+
+def predict_patches(model, patches, device, batch_sequences=64):
+    """Run the model over one utterance's patches, returning (n_frames, 4) in kHz."""
+    seqs, n_real = group_sequences(patches, SEQ_LEN)
+    out = []
+    with torch.no_grad():
+        for i in range(0, len(seqs), batch_sequences):
+            chunk = torch.from_numpy(seqs[i:i + batch_sequences]).to(device)
+            out.append(model(chunk).reshape(-1, 4).cpu().numpy())
+    return np.concatenate(out)[:n_real]
 
 
 def predict_from_wav(wav_filename, preds_file, model_path=DEFAULT_MODEL):
     if not os.path.exists(wav_filename):
         raise FileNotFoundError(f"WAV file not found at {wav_filename}")
 
-    spec = spectrogram_from_wav(wav_filename)
-    if spec.shape[1] == 0:
+    patches, _ = patches_from_wav(wav_filename)
+    if len(patches) == 0:
         raise ValueError(f"{wav_filename} is too short to produce any frame.")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = load_model(model_path, device, spec.shape[0])
-
-    # The whole utterance is fed as one sequence, so the recurrent layers see
-    # full context rather than the fixed-length chunks used during training.
-    inputs = torch.from_numpy(spec[None, None, :, :].astype(np.float32)).to(device)
-    with torch.no_grad():
-        preds = model(inputs).squeeze(0).cpu().numpy()
+    model = load_model(model_path, device)
+    preds = predict_patches(model, patches, device)
 
     with open(preds_file, 'w', newline='') as out_f:
         writer = csv.writer(out_f)

@@ -1,16 +1,18 @@
-"""CRNN formant tracker: convolutional frontend + recurrent head.
+"""CRNN formant tracker: a faithful PyTorch port of the original Keras model.
 
-The two halves deliberately reuse the architectures already published in this
-repo, so the CRNN is comparable with them rather than being a new design:
+The original lives in the project archive as old/Tracker/SingleCNNTracker.py with
+freq_norm_cnn_model2.json / freq_norm_cnn_weights_best2.h5 (Keras 1.2.2, Theano
+dim ordering). Architecture:
 
-  * conv channel progression 1 -> 96 -> 32 -> 64 -> 64 is taken from the CNN
-    estimator in spectrogramEstimate.py
-  * the recurrent head (LSTM 512 -> LSTM 256 -> Linear 4) is taken from the
-    LSTM tracker in pytorchFormants/Tracker/LPC_tracker.py
+    input (batch, 10, 1, 55, 50)
+    ConvLSTM2D(64, 3x3, border_mode='same', activation='relu',
+               inner_activation='hard_sigmoid', return_sequences=True)
+    TimeDistributed[ Conv2D(32, 3x3, valid) -> MaxPool(2,2) ] x4   # 55x50 -> 1x1
+    TimeDistributed[ Flatten -> Dropout(.05) -> Dense(256, relu)
+                     -> Dropout(.05) -> Dense(4, linear) ]
 
-Pooling is applied on the frequency axis only. The time axis keeps full
-resolution so the model still emits one F1-F4 prediction per 10 ms frame,
-which is what the tracking task requires.
+The gate semantics below reproduce Keras 1.2.2 exactly so the published weights
+can be loaded unchanged; see convert_keras_weights.py.
 """
 from __future__ import absolute_import, print_function
 
@@ -18,42 +20,102 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-N_BINS = 160          # must match crnn_feats.N_BINS
-N_POOLS = 4           # frequency axis is halved once per conv block
-CONV_OUT_CHANNELS = 64
+N_FREQ = 55
+N_TIME = 50
+SEQ_LEN = 10
+
+
+def hard_sigmoid(x):
+    """Keras 1.x hard_sigmoid: clip(0.2*x + 0.5, 0, 1)."""
+    return torch.clamp(0.2 * x + 0.5, 0.0, 1.0)
+
+
+class ConvLSTM2DCell(nn.Module):
+    """Single ConvLSTM2D step with Keras 1.2.2 gate ordering and activations.
+
+    Keras computes, per timestep:
+        i = inner_act(conv(x, W_i) + b_i + conv(h, U_i))
+        f = inner_act(conv(x, W_f) + b_f + conv(h, U_f))
+        c = f * c_prev + i * act(conv(x, W_c) + b_c + conv(h, U_c))
+        o = inner_act(conv(x, W_o) + b_o + conv(h, U_o))
+        h = o * act(c)
+    with act=relu and inner_act=hard_sigmoid here. Note the recurrent
+    convolutions carry no bias.
+    """
+
+    def __init__(self, in_channels=1, hidden_channels=64, kernel_size=3):
+        super(ConvLSTM2DCell, self).__init__()
+        self.hidden_channels = hidden_channels
+        pad = kernel_size // 2  # border_mode='same'
+
+        # Input-to-hidden convolutions (with bias), one per gate.
+        for g in ('i', 'f', 'c', 'o'):
+            setattr(self, 'W_' + g,
+                    nn.Conv2d(in_channels, hidden_channels, kernel_size, padding=pad, bias=True))
+        # Hidden-to-hidden convolutions (no bias), one per gate.
+        for g in ('i', 'f', 'c', 'o'):
+            setattr(self, 'U_' + g,
+                    nn.Conv2d(hidden_channels, hidden_channels, kernel_size, padding=pad, bias=False))
+
+    def forward(self, x, state):
+        h_prev, c_prev = state
+        i = hard_sigmoid(self.W_i(x) + self.U_i(h_prev))
+        f = hard_sigmoid(self.W_f(x) + self.U_f(h_prev))
+        o = hard_sigmoid(self.W_o(x) + self.U_o(h_prev))
+        c = f * c_prev + i * F.relu(self.W_c(x) + self.U_c(h_prev))
+        h = o * F.relu(c)
+        return h, c
 
 
 class CRNN(nn.Module):
 
-    def __init__(self, n_bins=N_BINS, output_dim=4):
+    def __init__(self, n_freq=N_FREQ, n_time=N_TIME, hidden_channels=64, output_dim=4,
+                 dropout=0.05):
         super(CRNN, self).__init__()
-        self.n_bins = n_bins
+        self.n_freq = n_freq
+        self.n_time = n_time
 
-        self.Conv1 = nn.Conv2d(in_channels=1, out_channels=96, kernel_size=(3, 3), stride=1, padding=1)
-        self.Conv2 = nn.Conv2d(in_channels=96, out_channels=32, kernel_size=(3, 3), stride=1, padding=1)
-        self.Conv3 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=(3, 3), stride=1, padding=1)
-        self.Conv4 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=(3, 3), stride=1, padding=1)
+        self.convlstm = ConvLSTM2DCell(1, hidden_channels, 3)
 
-        # After N_POOLS frequency halvings the conv stack emits
-        # CONV_OUT_CHANNELS * (n_bins / 2**N_POOLS) features per frame.
-        self.frame_dim = CONV_OUT_CHANNELS * (n_bins // (2 ** N_POOLS))
+        self.conv1 = nn.Conv2d(hidden_channels, 32, 3)
+        self.conv2 = nn.Conv2d(32, 32, 3)
+        self.conv3 = nn.Conv2d(32, 32, 3)
+        self.conv4 = nn.Conv2d(32, 32, 3)
 
-        self.lstm1 = nn.LSTM(input_size=self.frame_dim, hidden_size=512, batch_first=True)
-        self.lstm2 = nn.LSTM(input_size=512, hidden_size=256, batch_first=True)
-        self.fc = nn.Linear(256, output_dim)
+        self.flat_dim = self._infer_flat_dim(hidden_channels)
+        self.dropout = nn.Dropout(dropout)
+        self.fc1 = nn.Linear(self.flat_dim, 256)
+        self.fc2 = nn.Linear(256, output_dim)
+
+    def _infer_flat_dim(self, hidden_channels):
+        with torch.no_grad():
+            d = torch.zeros(1, hidden_channels, self.n_freq, self.n_time)
+            return self._conv_stack(d).shape[1]
+
+    def _conv_stack(self, x):
+        """Per-frame conv tower; 55x50 collapses to 1x1 with 32 channels."""
+        x = F.max_pool2d(F.relu(self.conv1(x)), 2)
+        x = F.max_pool2d(F.relu(self.conv2(x)), 2)
+        x = F.max_pool2d(F.relu(self.conv3(x)), 2)
+        x = F.max_pool2d(F.relu(self.conv4(x)), 2)
+        return x.reshape(x.size(0), -1)
 
     def forward(self, x):
-        """x: (batch, 1, n_bins, time) -> (batch, time, 4)"""
-        # Pool over frequency (dim 2) only, never over time (dim 3).
-        x = F.max_pool2d(F.relu(self.Conv1(x)), kernel_size=(2, 1))
-        x = F.max_pool2d(F.relu(self.Conv2(x)), kernel_size=(2, 1))
-        x = F.max_pool2d(F.relu(self.Conv3(x)), kernel_size=(2, 1))
-        x = F.max_pool2d(F.relu(self.Conv4(x)), kernel_size=(2, 1))
+        """x: (batch, seq, 1, n_freq, n_time) -> (batch, seq, 4)"""
+        batch, seq = x.shape[0], x.shape[1]
+        h = x.new_zeros(batch, self.convlstm.hidden_channels, self.n_freq, self.n_time)
+        c = torch.zeros_like(h)
 
-        # (batch, channels, freq, time) -> (batch, time, channels * freq)
-        batch, channels, freq, time = x.shape
-        x = x.permute(0, 3, 1, 2).reshape(batch, time, channels * freq)
+        hs = []
+        for t in range(seq):
+            h, c = self.convlstm(x[:, t], (h, c))
+            hs.append(h)
+        # (batch*seq, channels, freq, time) so the tower runs on every frame at once.
+        hs = torch.stack(hs, dim=1).reshape(batch * seq, *hs[0].shape[1:])
 
-        x, _ = self.lstm1(x)
-        x, _ = self.lstm2(x)
-        return self.fc(x)
+        y = self._conv_stack(hs)
+        y = self.dropout(y)
+        y = F.relu(self.fc1(y))
+        y = self.dropout(y)
+        y = self.fc2(y)
+        return y.reshape(batch, seq, -1)
