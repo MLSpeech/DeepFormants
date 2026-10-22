@@ -92,6 +92,37 @@ Estimation accepts `ff` or `cnn`; tracking accepts `rnn` or `crnn`. Passing a ba
 does not match the task is rejected rather than silently ignored.
 
 
+## Results
+
+Measured on the VTR test split with `evaluate.py`, mean absolute error in Hz.
+
+Estimation, over 2327 vowel segments:
+
+| Backend | F1 | F2 | F3 | F4 |
+|---|---|---|---|---|
+| `ff` | 48.9 | 86.3 | 112.3 | 155.0 |
+| `cnn` | 49.7 | 76.8 | 99.8 | 143.8 |
+
+Tracking, per phone class over 58k frames, alongside the published figures for
+comparison (the published table reports F1-F3 only):
+
+| Class | published | `rnn` | `crnn` |
+|---|---|---|---|
+| vowels | 54 / 81 / 112 | 57.6 / 80.1 / 106.6 | 68.2 / 78.8 / 116.1 |
+| semivowels | 67 / 114 / 168 | 65.0 / 107.0 / 158.8 | 77.4 / 111.8 / 164.6 |
+| nasal | 66 / 175 / 151 | 74.6 / 186.7 / 149.7 | 73.6 / 193.1 / 161.5 |
+| fricatives | 131 / 135 / 159 | 123.9 / 156.9 / 154.0 | 123.0 / 159.1 / 168.7 |
+| affricates | 164 / 162 / 189 | 171.3 / 149.7 / 204.3 | 175.6 / 170.9 / 200.7 |
+| stops | 130 / 113 / 119 | 128.1 / 136.2 / 164.0 | 131.6 / 146.2 / 177.8 |
+
+Reproduce any row with:
+
+```
+python evaluate.py --backend rnn --data .../Outputs/Test_tracker.npy \
+          --label_root .../shua_processed/Test
+```
+
+
 ## Training
 
 Each model has a matching `*_train.py` that takes its dataset paths as arguments, reports
