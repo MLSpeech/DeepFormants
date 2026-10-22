@@ -106,14 +106,20 @@ Estimation, over 2327 vowel segments:
 Tracking, per phone class over 58k frames, alongside the published figures for
 comparison (the published table reports F1-F3 only):
 
-| Class | published | `rnn` | `crnn` |
-|---|---|---|---|
-| vowels | 54 / 81 / 112 | 57.6 / 80.1 / 106.6 | 68.2 / 78.8 / 116.1 |
-| semivowels | 67 / 114 / 168 | 65.0 / 107.0 / 158.8 | 77.4 / 111.8 / 164.6 |
-| nasal | 66 / 175 / 151 | 74.6 / 186.7 / 149.7 | 73.6 / 193.1 / 161.5 |
-| fricatives | 131 / 135 / 159 | 123.9 / 156.9 / 154.0 | 123.0 / 159.1 / 168.7 |
-| affricates | 164 / 162 / 189 | 171.3 / 149.7 / 204.3 | 175.6 / 170.9 / 200.7 |
-| stops | 130 / 113 / 119 | 128.1 / 136.2 / 164.0 | 131.6 / 146.2 / 177.8 |
+| Class | published | `rnn` | `crnn` converted | `crnn` retrained |
+|---|---|---|---|---|
+| vowels | 54 / 81 / 112 | 57.6 / 80.1 / 106.6 | 68.2 / 78.8 / 116.1 | 59.7 / 81.0 / 107.9 |
+| semivowels | 67 / 114 / 168 | 65.0 / 107.0 / 158.8 | 77.4 / 111.8 / 164.6 | 69.8 / 109.1 / 148.2 |
+| nasal | 66 / 175 / 151 | 74.6 / 186.7 / 149.7 | 73.6 / 193.1 / 161.5 | 74.4 / 188.3 / 157.8 |
+| fricatives | 131 / 135 / 159 | 123.9 / 156.9 / 154.0 | 123.0 / 159.1 / 168.7 | 117.1 / 155.8 / 167.2 |
+| affricates | 164 / 162 / 189 | 171.3 / 149.7 / 204.3 | 175.6 / 170.9 / 200.7 | 165.3 / 180.8 / 212.3 |
+| stops | 130 / 113 / 119 | 128.1 / 136.2 / 164.0 | 131.6 / 146.2 / 177.8 | 123.5 / 145.2 / 178.7 |
+
+Two CRNN checkpoints are shipped. `CRNN_tracker.pt` is converted from the original Keras
+weights and is the default, since it reproduces the published model exactly.
+`CRNN_tracker_retrained.pt` was trained from scratch here and scores slightly better
+(mean 132.2 vs 134.3 Hz, and closer to the published figures on vowels); it had not fully
+converged at 40 epochs, so there is likely more in it. Select it with `--model`.
 
 Reproduce any row with:
 
