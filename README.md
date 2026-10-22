@@ -111,7 +111,7 @@ the example file, in Hz:
 ```
                   F1      F2      F3      F4
 ff             458.5  1642.7  2510.4  3689.1
-cnn            465.1  1763.5  2552.7  3619.8
+cnn            418.2  1733.6  2522.0  3614.4
 rnn    (frame 0)  659.4  1763.5  2798.1  4080.7
 crnn   (frame 0)  580.8  1603.5  2507.5  3914.7
 ```
@@ -133,7 +133,13 @@ Estimation, over 2327 vowel segments:
 | Backend | F1 | F2 | F3 | F4 |
 |---|---|---|---|---|
 | `ff` | 48.9 | 86.3 | 112.3 | 155.0 |
-| `cnn` | 49.7 | 76.8 | 99.8 | 143.8 |
+| `cnn` | 52.1 | 76.6 | 110.4 | 147.0 |
+
+The `cnn` row is the merged VTR+Hillenbrand+Clopper model, selected on a held-out
+validation split and scored on test exactly once. An earlier build of it selected the
+checkpoint on the test set and scored 49.7 / 76.8 / 99.8 / 143.8; that 4 Hz difference is
+the selection bias, not a real improvement, and is why the training scripts no longer
+look at test until the end.
 
 Tracking, per phone class over 58k frames, alongside the published figures for
 comparison (the published table reports F1-F3 only):
