@@ -28,11 +28,53 @@ sys.path.append(os.path.join(HERE, "pytorchFormants", "CRNN"))
 from weights import resolve
 
 
+# The phone classes used for the published per-class tracking tables, taken
+# verbatim from Tracker/LPC_model_apply.py.
+PHONE_CLASSES = {
+    "vowels": ['aa', 'ae', 'ah', 'ao', 'aw', 'ax', 'axr', 'ay', 'eh', 'er', 'ey', 'ih',
+               'ix', 'iy', 'ow', 'oy', 'uh', 'uw', 'ux', 'axh'],
+    "semivowels": ["l", "r", "er", "w", "y", "el", "hh", "hv"],
+    "nasal": ["em", "en", "eng", "m", "n", "ng", "nx"],
+    "fricatives": ["s", "z", "sh", "zh", "f", "th", "v", "dh", "em", "en", "eng",
+                   "m", "n", "ng", "nx"],
+    "affricates": ["ch", "jh"],
+    "stops": ['b', "d", "g", "p", "t", "k", "dx", "q"],
+}
+
+
 def mae_hz(pred, target):
     mask = target > 0
     counts = mask.sum(axis=0).astype(np.float64)
     counts[counts == 0] = np.nan
     return 1000.0 * (np.abs(pred - target) * mask).sum(axis=0) / counts
+
+
+def phones_for(stem, label_root):
+    """Per-frame phone labels for an utterance named dr<N>_<spk>_<utt>."""
+    dr, spk, utt = stem.split('_')[:3]
+    path = os.path.join(label_root, dr, spk, utt + '.label')
+    if not os.path.exists(path):
+        return None
+    out = []
+    with open(path, 'r') as f:
+        for line in f:
+            parts = line.rstrip('\n').split('\t')
+            if parts and parts[0]:
+                out.append(parts[0])
+    return out
+
+
+def report_by_phone(phones, pred, target):
+    """Per-class MAE in Hz, in the style of the published tracking table."""
+    phones = np.asarray(phones)
+    print(f"{'class':<12} {'n':>7}  {'F1':>6} {'F2':>6} {'F3':>6} {'F4':>6}")
+    for name, members in PHONE_CLASSES.items():
+        sel = np.isin(phones, members)
+        if not sel.any():
+            continue
+        e = mae_hz(pred[sel], target[sel])
+        print(f"{name:<12} {int(sel.sum()):>7}  "
+              f"{e[0]:>6.1f} {e[1]:>6.1f} {e[2]:>6.1f} {e[3]:>6.1f}")
 
 
 def eval_ff(data, model_path, device):
@@ -64,7 +106,7 @@ def eval_cnn(data, model_path, device):
     return mae_hz(np.concatenate(preds), Y), len(Y)
 
 
-def eval_rnn(data, model_path, device, seq_len=20):
+def eval_rnn(data, model_path, device, seq_len=20, label_root=None):
     from rnn_model import LSTMTracker
     rows = np.load(data, allow_pickle=True)
     X = np.nan_to_num(rows[:, 5:].astype(np.float32))
@@ -79,28 +121,39 @@ def eval_rnn(data, model_path, device, seq_len=20):
         for i in range(0, len(Xs), 500):
             preds.append(model(torch.from_numpy(Xs[i:i + 500]).to(device)).cpu().numpy())
     P = np.concatenate(preds).reshape(-1, 4)
+
+    if label_root:
+        # Row names look like dr2_mwew0_sx191_frame_7.
+        cache, phones = {}, []
+        for name in rows[:n, 0]:
+            stem, _, idx = str(name).rpartition('_frame_')
+            if stem not in cache:
+                cache[stem] = phones_for(stem, label_root) or []
+            seq = cache[stem]
+            phones.append(seq[int(idx)] if idx.isdigit() and int(idx) < len(seq) else '')
+        report_by_phone(phones, P, Y[:n])
     return mae_hz(P, Y[:n]), n
 
 
-def eval_crnn(data, model_path, device):
+def eval_crnn(data, model_path, device, label_root=None):
     from crnn_inference import load_model, predict_patches
     entries = np.load(data, allow_pickle=True)
     model = load_model(model_path, device)
-    err = np.zeros(4)
-    cnt = np.zeros(4)
-    total = 0
-    for _, labels, patches in entries:
+    all_pred, all_lab, all_phones = [], [], []
+    for name, labels, patches in entries:
         n = min(len(patches), len(labels))
         if n == 0:
             continue
-        P = predict_patches(model, patches[:n], device)[:n]
-        lab = labels[:n]
-        m = lab > 0
-        err += (np.abs(P - lab) * m).sum(axis=0)
-        cnt += m.sum(axis=0)
-        total += n
-    cnt[cnt == 0] = np.nan
-    return 1000.0 * err / cnt, total
+        all_pred.append(predict_patches(model, patches[:n], device)[:n])
+        all_lab.append(labels[:n])
+        if label_root:
+            seq = phones_for(str(name), label_root) or []
+            all_phones.extend(seq[:n] + [''] * max(0, n - len(seq)))
+    P = np.concatenate(all_pred)
+    Y = np.concatenate(all_lab)
+    if label_root:
+        report_by_phone(all_phones, P, Y)
+    return mae_hz(P, Y), len(Y)
 
 
 EVALS = {'ff': eval_ff, 'cnn': eval_cnn, 'rnn': eval_rnn, 'crnn': eval_crnn}
@@ -111,10 +164,18 @@ def main():
     parser.add_argument('--backend', required=True, choices=sorted(EVALS))
     parser.add_argument('--data', required=True, help="prepared test split for this backend")
     parser.add_argument('--model', default=None, help="checkpoint (default: resolved)")
+    parser.add_argument('--label_root', default=None,
+                        help="VTR Test/ directory; adds the per-phone-class breakdown "
+                             "used by the published tracking table (rnn/crnn only)")
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    errors, n = EVALS[args.backend](args.data, args.model, device)
+    kwargs = {}
+    if args.label_root:
+        if args.backend not in ('rnn', 'crnn'):
+            parser.error("--label_root only applies to the tracking backends (rnn, crnn).")
+        kwargs['label_root'] = args.label_root
+    errors, n = EVALS[args.backend](args.data, args.model, device, **kwargs)
     print(f"{args.backend:5s} n={n:<7d} MAE Hz: "
           f"F1 {errors[0]:6.1f}  F2 {errors[1]:6.1f}  "
           f"F3 {errors[2]:6.1f}  F4 {errors[3]:6.1f}  | mean {np.nanmean(errors):.1f}")
