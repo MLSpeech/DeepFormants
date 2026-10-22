@@ -89,10 +89,20 @@ def patches_from_spectrogram(spec):
     return np.asarray(patches, dtype=np.float32), offsets
 
 
+def is_16k_mono(wav_filename):
+    """True when sox would be a no-op, so corpus-sized runs can skip it."""
+    try:
+        with wave.open(wav_filename, 'rb') as f:
+            return (f.getframerate() == SAMPLE_RATE and f.getnchannels() == 1
+                    and f.getsampwidth() == 2 and f.getcomptype() == 'NONE')
+    except Exception:
+        return False
+
+
 def patches_from_wav(wav_filename, convert=True):
     tmp = None
     try:
-        if convert:
+        if convert and not is_16k_mono(wav_filename):
             tmp = to_16k_mono(wav_filename)
             path = tmp
         else:
