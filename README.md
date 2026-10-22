@@ -5,12 +5,21 @@ Shua Dissen (shua.dissen@gmail.com)
 Joseph Keshet (jkeshet@technion.ac.il)  
 
 
-DeepFormants is a software package for formant tracking and estimation, using two algorithms based on deep networks. It works as follows:
+DeepFormants is a software package for formant tracking and estimation, using deep networks. It works as follows:
 * The user provides a wav file with an initial stop consonant. 
 * Optionally, the user can designate a window for estimation by providing a start and end time (specified in seconds).
 * A classifer is used to estimate the formants in the file, with two modes:
 * Estimation: If a time window is specified, a single estimate is made for F1-F4 within that window. 
 * Tracking: If no time window is given, the model will track F1-F4 and give a measurement at every 10 milliseconds across the length of the file.
+
+Four models are available, two per task, selected with `--backend`:
+
+| Task | `--backend` | Model | Input |
+|---|---|---|---|
+| Estimation | `ff` (default) | dense net | 350-dim LPC/cepstral vector |
+| Estimation | `cnn` | 4-layer CNN | 55x50 spectrogram image |
+| Tracking | `rnn` (default) | 2-layer LSTM | 350-dim LPC/cepstral vector, per frame |
+| Tracking | `crnn` | ConvLSTM2D + conv tower | 55x50 spectrogram patches, per frame |
 
 This is a beta version of DeepFormants. Any reports of bugs, comments on how to improve the software or documentation, or questions are greatly appreciated, and should be sent to the authors at the addresses given above.
 
@@ -19,28 +28,41 @@ This is a beta version of DeepFormants. Any reports of bugs, comments on how to 
 
 ## Installation instructions
 
-Download the code. The code is based on signal processing package in Python called [Talkbox] (https://pypi.python.org/pypi/scikits.talkbox) and a deep networks package called [Torch] (torch.ch).
+Download the code. Estimation and tracking both run on [PyTorch](https://pytorch.org); the
+original Torch7/Lua loaders are no longer needed. LPC analysis is done by the bundled
+`levinson_lpc.py`, so `scikits.talkbox` is no longer a dependency either.
 
 Dependencies:
-Run these lines in a terminal to install everything necessary for feature extraction.
 ```
-sudo apt-get install python-numpy python-scipy python-nose python-pip
+pip install -r requirements.txt
+```
+That installs `torch`, `numpy` and `scipy`, which is everything the four models need for
+both training and inference. `requirements.txt` also lists three optional extras, commented
+out: `h5py` (only to re-convert the original Keras CRNN weights), `huggingface_hub` (only
+as a fallback for a checkpoint that is not committed) and `wandb` (only for the `--wandb`
+training flag).
 
-sudo pip install scikits.talkbox 
+`sox` is used to resample input audio to 16 kHz mono and is not installable with pip:
 ```
-Next for the installation of Torch for loading the models run this.
+sudo apt-get install sox
 ```
-git clone https://github.com/torch/distro.git ~/torch --recursive
 
-cd ~/torch; bash install-deps;
+All four sets of weights are committed under `pytorchFormants/` and load automatically:
 
-./install.sh
-```
-```
-luarocks install rnn
-```
-The Estimation model can be downloaded here and because of size constraints the Tracking model can be abtained by download from this link 
-[tracking_model.dat.gz](https://drive.google.com/open?id=1-BwlbbHykIV52c-SL1ofcppxZ5pTTXai)
+| Backend | Checkpoint | Size |
+|---|---|---|
+| `ff` | `Estimator/LPC_NN_scaledLoss.pt` | 3.9 MB |
+| `cnn` | `Estimator/CNN_estimate.pt` | 16.8 MB |
+| `rnn` | `Tracker/LPC_RNN.pt` | 9.8 MB |
+| `crnn` | `CRNN/CRNN_tracker.pt` | 0.8 MB |
+
+`pytorchFormants/weights.py` resolves checkpoints: an explicit `--model` wins, otherwise a
+committed copy is used, and only if one is missing is it fetched from Hugging Face
+(set `DEEPFORMANTS_HF_REPO` to override the repo). Install `huggingface_hub` if you rely
+on that fallback.
+
+The legacy Torch7 files (`estimation_model.dat`, `load_estimation_model.lua`,
+`load_tracking_model.lua`) are kept only for reference.
 
 ## How to use:
 
@@ -57,15 +79,176 @@ python formants.py data/Example.wav data/examplePredictions.csv --textgrid_filen
           --textgrid_tier VOWEL
 ```
 
+`data/Example.TextGrid` is a small illustrative grid marking two windows, not a phonetic
+annotation; its first interval is the same 1.2-1.3 window used above, so both commands
+agree on that vowel.
+
 For formant tracking, just call the script with the wav file and output filename:
 
 ```
 python formants.py data/Example.wav data/ExamplePredictions.csv
 ```
 
+### Running each of the four models
 
-## TODO
+Estimation accepts `ff` or `cnn`, tracking accepts `rnn` or `crnn`, and a backend that does
+not match the task is rejected rather than silently ignored. Each of these runs as-is on
+the bundled example file:
 
-Add training code.
+```
+# Estimation - one F1-F4 for the 1.2-1.3s window
+python formants.py data/Example.wav preds_ff.csv   --begin 1.2 --end 1.3 --backend ff
+python formants.py data/Example.wav preds_cnn.csv  --begin 1.2 --end 1.3 --backend cnn
+
+# Tracking - F1-F4 every 10ms, 231 frames for this file
+python formants.py data/Example.wav preds_rnn.csv  --backend rnn
+python formants.py data/Example.wav preds_crnn.csv --backend crnn
+```
+
+Omitting `--backend` gives `ff` for estimation and `rnn` for tracking. Expected output on
+the example file, in Hz:
+
+```
+                  F1      F2      F3      F4
+ff             458.5  1642.7  2510.4  3689.1
+cnn            465.1  1763.5  2552.7  3619.8
+rnn    (frame 0)  659.4  1763.5  2798.1  4080.7
+crnn   (frame 0)  580.8  1603.5  2507.5  3914.7
+```
+
+To use the retrained CRNN instead of the converted original:
+
+```
+python formants.py data/Example.wav preds.csv --backend crnn \
+          --model pytorchFormants/CRNN/CRNN_tracker_retrained.pt
+```
+
+
+## Results
+
+Measured on the VTR test split with `evaluate.py`, mean absolute error in Hz.
+
+Estimation, over 2327 vowel segments:
+
+| Backend | F1 | F2 | F3 | F4 |
+|---|---|---|---|---|
+| `ff` | 48.9 | 86.3 | 112.3 | 155.0 |
+| `cnn` | 49.7 | 76.8 | 99.8 | 143.8 |
+
+Tracking, per phone class over 58k frames, alongside the published figures for
+comparison (the published table reports F1-F3 only):
+
+| Class | published | `rnn` | `crnn` converted | `crnn` retrained |
+|---|---|---|---|---|
+| vowels | 54 / 81 / 112 | 57.6 / 80.1 / 106.6 | 68.2 / 78.8 / 116.1 | 59.7 / 81.0 / 107.9 |
+| semivowels | 67 / 114 / 168 | 65.0 / 107.0 / 158.8 | 77.4 / 111.8 / 164.6 | 69.8 / 109.1 / 148.2 |
+| nasal | 66 / 175 / 151 | 74.6 / 186.7 / 149.7 | 73.6 / 193.1 / 161.5 | 74.4 / 188.3 / 157.8 |
+| fricatives | 131 / 135 / 159 | 123.9 / 156.9 / 154.0 | 123.0 / 159.1 / 168.7 | 117.1 / 155.8 / 167.2 |
+| affricates | 164 / 162 / 189 | 171.3 / 149.7 / 204.3 | 175.6 / 170.9 / 200.7 | 165.3 / 180.8 / 212.3 |
+| stops | 130 / 113 / 119 | 128.1 / 136.2 / 164.0 | 131.6 / 146.2 / 177.8 | 123.5 / 145.2 / 178.7 |
+
+Two CRNN checkpoints are shipped. `CRNN_tracker.pt` is converted from the original Keras
+weights and is the default, since it reproduces the published model exactly.
+`CRNN_tracker_retrained.pt` was trained from scratch here and scores slightly better
+(mean 132.2 vs 134.3 Hz, and closer to the published figures on vowels); it had not fully
+converged at 40 epochs, so there is likely more in it. Select it with `--model`.
+
+Reproduce any row with:
+
+```
+python evaluate.py --backend rnn --data .../Outputs/Test_tracker.npy \
+          --label_root .../shua_processed/Test
+```
+
+
+## Training
+
+### A note on the data
+
+The corpora used here are licensed to us and are **not ours to redistribute**: VTR
+annotations over TIMIT audio (LDC), Hillenbrand, and Clopper. Neither the audio nor any
+features derived from it are published with this repository, and `.gitignore` is set up to
+keep derived `.npy` files out of commits. Obtain the corpora yourself, then build the
+features locally with the scripts below.
+
+The dataset paths shown are the defaults on our machines; pass your own with the
+corresponding flags.
+
+Each model has a matching `*_train.py` that takes its dataset paths as arguments, reports
+per-formant test error in Hz, and writes a checkpoint only when the model improves. Add
+`--wandb` to any of them to log to Weights & Biases.
+
+Labels of `-1` mark an unannotated formant (Clopper annotates only F1/F2, Hillenbrand only
+a few points per vowel). Every training script masks those out of the loss rather than
+regressing towards -1 kHz.
+
+### Feature building
+
+The LPC/cepstral features for `ff` and `rnn`:
+
+```
+python pytorchFormants/Estimator/create_VTR_feats.py     # -> Train.npy, Test.npy
+python pytorchFormants/Tracker/create_VTR_feats.py       # -> Train_tracker.npy, Test_tracker.npy
+```
+
+The spectrogram images for `cnn`, optionally merging corpora:
+
+```
+python pytorchFormants/Estimator/build_cnn_data.py --corpora vtr hillenbrand clopper \
+          --prefix merged --output_dir data/cnn/
+```
+
+The spectrogram patch sequences for `crnn`. Expects a directory tree of WAVs each with a
+matching `.label` file (tab separated: phone, then F1-F4 in Hz, one row per 10 ms):
+
+```
+python pytorchFormants/CRNN/crnn_feats.py --train_dir /path/Train/ --test_dir /path/Test/ \
+          --output_dir data/crnn/
+```
+
+### Training runs
+
+```
+python pytorchFormants/Estimator/ff_train.py   --train_data .../Train.npy \
+          --test_data .../Test.npy
+
+python pytorchFormants/Estimator/cnn_train.py  --train_X data/cnn/merged_train_X.npy \
+          --train_Y data/cnn/merged_train_Y.npy --test_X data/cnn/merged_test_X.npy \
+          --test_Y data/cnn/merged_test_Y.npy --arch keras
+
+python pytorchFormants/Tracker/rnn_train.py    --train_data .../Train_tracker.npy \
+          --test_data .../Test_tracker.npy
+
+python pytorchFormants/CRNN/crnn_train.py      --train_data data/crnn/Train_crnn.npy \
+          --test_data data/crnn/Test_crnn.npy
+```
+
+`cnn_train.py --arch` picks the topology: `keras` reproduces the original estimator and is
+the default; `legacy` is the larger variant the first PyTorch port drifted into, whose
+first dense layer alone holds 53.5M parameters. Checkpoints are routed to the right
+topology automatically, so either loads without a flag.
+
+
+## The CRNN tracker
+
+The CRNN is a ConvLSTM2D over spectrogram patches: the recurrence lives inside the
+convolution rather than after it.
+
+```
+input (batch, 10, 1, 55, 50)
+ConvLSTM2D(64, 3x3, same, relu / hard_sigmoid, return_sequences)
+TimeDistributed[ Conv2D(32,3x3) -> MaxPool(2,2) ] x4          # 55x50 -> 1x1
+TimeDistributed[ Flatten -> Dropout -> Dense(256) -> Dropout -> Dense(4) ]
+```
+
+The committed weights are converted from the original Keras 1.2.2 model. Theano convolves
+where PyTorch cross-correlates, so the conversion flips every conv kernel on both spatial
+axes; the result reproduces the original model's own predictions to 0.002 Hz. To redo the
+conversion from a `.h5`:
+
+```
+python pytorchFormants/CRNN/convert_keras_weights.py weights_best2.h5 \
+          pytorchFormants/CRNN/CRNN_tracker.pt
+```
 
 

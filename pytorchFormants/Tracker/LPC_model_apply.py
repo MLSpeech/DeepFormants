@@ -79,7 +79,8 @@ def get_error(y_actual, y_predicted):
 # LOAD MODEL
 model = LSTM()
 run.watch(model)
-model.load_state_dict(torch.load("LPC_RNN_0507.pt"))
+model.load_state_dict(torch.load(os.path.join(os.path.dirname(os.path.abspath(__file__)), "LPC_RNN.pt"),
+                                 map_location=device))
 model.to(device)
 #save model inputs and hyperparameters
 config = run.config

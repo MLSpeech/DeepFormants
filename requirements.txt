@@ -1,0 +1,25 @@
+# Core: needed by all four models, for both training and inference.
+torch>=1.13
+numpy>=1.20
+scipy>=1.5
+
+# Optional extras, each used by one thing only. Install if you need it:
+#
+#   h5py            convert_keras_weights.py, to re-convert the original
+#                   Keras CRNN weights into a PyTorch checkpoint. Not needed
+#                   to use the converted weights that ship with the repo.
+#
+#   huggingface_hub pytorchFormants/weights.py, only as a fallback for a
+#                   checkpoint that is not committed. All four currently are,
+#                   so this is not needed for normal use.
+#
+#   wandb           the --wandb flag on the training scripts. Imported only
+#                   when that flag is passed.
+#
+# h5py>=3.0
+# huggingface_hub>=0.16
+# wandb>=0.12
+
+# Also required, but not installable with pip:
+#   sox   used to resample input audio to 16 kHz mono
+#         (apt-get install sox / brew install sox)

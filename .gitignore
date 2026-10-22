@@ -1,0 +1,29 @@
+# Corpus data and anything derived from it must never be committed.
+# VTR/TIMIT, Hillenbrand and Clopper are licensed to us, not ours to
+# redistribute. Build features locally with the scripts under pytorchFormants/.
+*.npy
+*.npz
+*.fb
+*.phn
+*.wrd
+*.label
+*.rar
+*.zip
+*.tgz
+*.tar.gz
+data/crnn/
+data/cnn/
+Outputs/
+*_train_X.npy
+*_test_X.npy
+
+# Audio: the one example file under data/ is tracked deliberately, everything
+# else is assumed to be corpus material.
+*.wav
+!data/Example.wav
+
+# Training run artefacts
+wandb/
+Trained_models/
+*.pyc
+__pycache__/
