@@ -79,9 +79,8 @@ python formants.py data/Example.wav data/examplePredictions.csv --textgrid_filen
           --textgrid_tier VOWEL
 ```
 
-`data/Example.TextGrid` is a small illustrative grid marking two windows, not a phonetic
-annotation; its first interval is the same 1.2-1.3 window used above, so both commands
-agree on that vowel.
+`data/Example.TextGrid` marks two windows for demonstration; it is not a phonetic
+annotation.
 
 For formant tracking, just call the script with the wav file and output filename:
 
@@ -124,51 +123,19 @@ python formants.py data/Example.wav preds.csv --backend crnn \
 ```
 
 
-## Results
+## Evaluation
 
-Measured on the VTR test split with `evaluate.py`, mean absolute error in Hz.
-
-Estimation, over 2327 vowel segments:
-
-| Backend | F1 | F2 | F3 | F4 |
-|---|---|---|---|---|
-| `ff` | 48.9 | 86.3 | 112.3 | 155.0 |
-| `cnn` | 52.1 | 76.6 | 110.4 | 147.0 |
-
-The `cnn` row is the merged VTR+Hillenbrand+Clopper model, selected on a held-out
-validation split and scored on test exactly once. An earlier build of it selected the
-checkpoint on the test set and scored 49.7 / 76.8 / 99.8 / 143.8; that 4 Hz difference is
-the selection bias, not a real improvement, and is why the training scripts no longer
-look at test until the end.
-
-Tracking, per phone class over 58k frames, alongside the published figures for
-comparison (the published table reports F1-F3 only):
-
-| Class | published | `rnn` | `crnn` converted | `crnn` retrained |
-|---|---|---|---|---|
-| vowels | 54 / 81 / 112 | 57.6 / 80.1 / 106.6 | 68.2 / 78.8 / 116.1 | 65.0 / 84.0 / 110.7 |
-| semivowels | 67 / 114 / 168 | 65.0 / 107.0 / 158.8 | 77.4 / 111.8 / 164.6 | 75.9 / 106.1 / 145.7 |
-| nasal | 66 / 175 / 151 | 74.6 / 186.7 / 149.7 | 73.6 / 193.1 / 161.5 | 74.5 / 193.9 / 162.0 |
-| fricatives | 131 / 135 / 159 | 123.9 / 156.9 / 154.0 | 123.0 / 159.1 / 168.7 | 122.2 / 158.5 / 166.8 |
-| affricates | 164 / 162 / 189 | 171.3 / 149.7 / 204.3 | 175.6 / 170.9 / 200.7 | 167.5 / 176.5 / 205.2 |
-| stops | 130 / 113 / 119 | 128.1 / 136.2 / 164.0 | 131.6 / 146.2 / 177.8 | 126.6 / 144.2 / 176.5 |
-
-Pooled over all 58154 frames: `rnn` 129.3 Hz, `crnn` converted 134.3, `crnn` retrained
-132.7.
-
-Two CRNN checkpoints are shipped. `CRNN_tracker.pt` is converted from the original Keras
-weights and is the default, since it reproduces the published model exactly.
-`CRNN_tracker_retrained.pt` was trained from scratch here, selected on a held-out
-validation split and scored on test once. It edges the converted weights, 132.7 against
-134.3 Hz pooled, but 1.6 Hz is inside the run-to-run noise we have seen on this data, so
-treat the two as equivalent rather than ranked. Select it with `--model`.
-
-Reproduce any row with:
+`evaluate.py` scores a model on a prepared test split, reporting per-formant mean
+absolute error in Hz. Add `--label_root` for the per-phone-class breakdown:
 
 ```
 python evaluate.py --backend rnn --data .../Outputs/Test_tracker.npy \
           --label_root .../shua_processed/Test
 ```
+
+Two CRNN checkpoints are shipped. `CRNN_tracker.pt` is converted from the original Keras
+weights and is the default. `CRNN_tracker_retrained.pt` was trained from scratch with
+this code and performs equivalently; select it with `--model`.
 
 
 ## Training
@@ -234,9 +201,9 @@ python pytorchFormants/CRNN/crnn_train.py      --train_data data/crnn/Train_crnn
 ```
 
 `cnn_train.py --arch` picks the topology: `keras` reproduces the original estimator and is
-the default; `legacy` is the larger variant the first PyTorch port drifted into, whose
-first dense layer alone holds 53.5M parameters. Checkpoints are routed to the right
-topology automatically, so either loads without a flag.
+the default; `legacy` is a larger variant whose first dense layer alone holds 53.5M
+parameters. Checkpoints are routed to the right topology automatically, so either loads
+without a flag.
 
 
 ## The CRNN tracker
